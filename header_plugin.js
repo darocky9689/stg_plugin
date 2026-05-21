@@ -9,7 +9,7 @@
     imageSelector: '.large-image-component',
     fixedImageHeight: 482,
     mobileImageHeight: 300,
-    overlayHeightRatio: 0.92,
+    overlayHeightRatio: 0.9,
     mobileBreakpoint: 768,
     styleId: 'job-header-plugin-styles',
     initFlag: 'jobHeaderPluginInitialized',
@@ -143,8 +143,8 @@
         position: absolute;
         right: 0;
         top: 50%;
-        width: 40%;
-        max-width: 40%;
+        width: 44%;
+        max-width: 44%;
         background: #395366;
         z-index: 2;
         display: flex;
