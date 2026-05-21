@@ -11,7 +11,7 @@
     desktopOverlayWidthPercent: 40,
     fixedImageHeight: 482,
     mobileImageHeight: 300,s
-    overlayHeightRatio: 0.9,
+    overlayHeightRatio: 0.97,
     mobileBreakpoint: 768,
     styleId: 'job-header-plugin-styles',
     initFlag: 'jobHeaderPluginInitialized',
