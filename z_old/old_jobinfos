@@ -1,0 +1,137 @@
+
+// Eigenständiges Job Info Design (nicht mit Overlay mischen)
+const debug_job = null; // z.B. "123456-de_DE" für Test
+
+const JOBINFO_STYLE_ID = 'jobinfodesign-style';
+const JOBINFO_SCRIPT_ANCHOR = document.currentScript; // Positionierungsanker
+
+function injectJobInfoStyles() {
+  if (document.getElementById(JOBINFO_STYLE_ID)) return;
+  const style = document.createElement('style');
+  style.id = JOBINFO_STYLE_ID;
+  style.textContent = `
+  .jobinfodesign-wrapper { width:100%; display:flex; justify-content:center; margin:40px 0 24px; }
+  .jobinfodesign-inner { display:flex; gap:48px; padding:32px 48px; background:#ffffff; max-width:1200px; width:100%; box-sizing:border-box; font-family:inherit; justify-content:center; }
+  .jobinfodesign-item { display:flex; flex-direction:column; min-width:150px; position:relative; align-items:center; text-align:center; }
+  .jobinfodesign-item.company { min-width:150px; }
+  .jobinfodesign-item:not(:last-child):after { content:''; position:absolute; top:8px; right:-20px; width:1px; height:calc(100% - 16px); background:#dbe3ea; }
+  .jobinfodesign-icon { width:44px; height:44px; margin-bottom:10px; object-fit:contain; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.15)); background:#395366; border-radius:50%; padding:8px; box-sizing:border-box; }
+  .jobinfodesign-label { font-size:13px; letter-spacing:.4px; text-transform:uppercase; font-weight:600; color:#395366; margin-bottom:4px; }
+  .jobinfodesign-value { font-size:16px; font-weight:500; line-height:1.35; color:#22323f; word-break:break-word; }
+  .jobinfodesign-companylogo { width:90px; max-width:130px; height:auto; object-fit:contain; margin-top:6px; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.12)); }
+  @media (max-width: 1100px) { .jobinfodesign-inner { gap:40px; padding:30px 40px; } }
+  @media (max-width: 980px) { .jobinfodesign-inner { gap:32px; padding:28px 36px; } .jobinfodesign-item { min-width:130px; } .jobinfodesign-item:not(:last-child):after { right:-16px; } }
+  @media (max-width: 760px) {
+    .jobinfodesign-inner { flex-wrap:wrap; gap:36px 56px; padding:26px 30px; border-radius:22px; }
+    .jobinfodesign-item { flex:1 1 200px; min-width:0; }
+    /* Vertikale Trenner entfernen, stattdessen horizontale Linien unter jedem Block außer dem letzten sichtbaren */
+    .jobinfodesign-item:not(:last-child):after { display:none; }
+    .jobinfodesign-item { border-bottom:1px solid #dbe3ea; padding-bottom:18px; }
+    .jobinfodesign-item:last-child { border-bottom:none; }
+  }
+  @media (max-width: 520px) {
+    .jobinfodesign-inner { gap:32px 32px; padding:22px 22px; }
+    .jobinfodesign-icon { width:40px; height:40px; padding:6px; }
+    .jobinfodesign-value { font-size:15px; }
+    .jobinfodesign-item { border-bottom:1px solid #dbe3ea; padding-bottom:16px; }
+    .jobinfodesign-item:last-child { border-bottom:none; }
+  }
+  `;
+  document.head.appendChild(style);
+}
+
+async function fetchJobInfo(jobId) {
+  const feedUrl = 'https://stiegemeyt1.valhalla55.stage.jobs2web.com/feed/430205';
+  const response = await fetch(feedUrl);
+  const xmlText = await response.text();
+  const parser = new DOMParser();
+  const xmlDoc = parser.parseFromString(xmlText, 'application/xml');
+  const jobs = xmlDoc.querySelectorAll('job');
+  for (const job of jobs) {
+    const idNode = job.querySelector('ID');
+    if (idNode && idNode.textContent === jobId) {
+      return {
+        businessUnit: job.querySelector('businessunit')?.textContent || '',
+        location: job.querySelector('location')?.textContent || '',
+        shifttype: job.querySelector('shifttype')?.textContent || '',
+        entryDate: job.querySelector('customfield5')?.textContent || ''
+      };
+    }
+  }
+  return { businessUnit: '', location: '', shifttype: '', entryDate: '' };
+}
+
+function getJobReqIdFromUrl() {
+  const url = window.location.href;
+  const match = url.match(/\/([0-9]+-de_DE)$/);
+  return match ? match[1] : null;
+}
+
+function createItem(iconUrl, label, value, extraClass = '') {
+  const wrap = document.createElement('div');
+  wrap.className = 'jobinfodesign-item ' + extraClass;
+  const icon = document.createElement('img'); icon.src = iconUrl; icon.alt = label + ' Icon'; icon.className = 'jobinfodesign-icon';
+  const l = document.createElement('div'); l.className = 'jobinfodesign-label'; l.textContent = label;
+  const v = document.createElement('div'); v.className = 'jobinfodesign-value'; v.textContent = value && value.trim() !== '' ? value : '-';
+  wrap.appendChild(icon); wrap.appendChild(l); wrap.appendChild(v);
+  return wrap;
+}
+
+function buildJobInfoDOM(info) {
+  const outer = document.createElement('div'); outer.className = 'jobinfodesign-wrapper';
+  const inner = document.createElement('div'); inner.className = 'jobinfodesign-inner';
+
+  // Unternehmen: Icon + Label + dynamisches Logo
+  const companyItem = document.createElement('div'); companyItem.className = 'jobinfodesign-item company';
+  const companyIcon = document.createElement('img');
+  companyIcon.src = 'https://www.stiegelmeyer-group.com/_assets/b8240a57c4b6735fe1567cb15f63534c/Icons/Jobs/Icon-Company.svg';
+  companyIcon.alt = 'Unternehmen';
+  companyIcon.className = 'jobinfodesign-icon';
+  const companyLabel = document.createElement('div'); companyLabel.className = 'jobinfodesign-label'; companyLabel.textContent = 'Unternehmen';
+  const companyLogo = document.createElement('img');
+  const bu = (info.businessUnit || '').toLowerCase();
+  if (bu.includes('burmeier')) { companyLogo.src = 'https://www.stiegelmeyer-group.com/_assets/b8240a57c4b6735fe1567cb15f63534c/Images/burmeier.svg'; companyLogo.alt = 'Burmeier'; }
+  else { companyLogo.src = 'https://www.stiegelmeyer-group.com/_assets/b8240a57c4b6735fe1567cb15f63534c/Images/stiegelmeyer-logo.svg'; companyLogo.alt = 'Stiegelmeyer'; }
+  companyLogo.className = 'jobinfodesign-companylogo';
+  companyItem.appendChild(companyIcon);
+  companyItem.appendChild(companyLabel);
+  companyItem.appendChild(companyLogo);
+  inner.appendChild(companyItem);
+
+  inner.appendChild(createItem('https://www.stiegelmeyer-group.com/_assets/b8240a57c4b6735fe1567cb15f63534c/Icons/Jobs/Icon-Location.svg', 'Standort', info.location));
+  inner.appendChild(createItem('https://www.stiegelmeyer-group.com/_assets/b8240a57c4b6735fe1567cb15f63534c/Icons/Jobs/Icon-Workload.svg', 'Auslastung', info.shifttype));
+  inner.appendChild(createItem('https://www.stiegelmeyer-group.com/_assets/b8240a57c4b6735fe1567cb15f63534c/Icons/Jobs/Icon-EntryDate.svg', 'Einstiegsdatum', info.entryDate));
+
+  outer.appendChild(inner);
+  return outer;
+}
+
+function placeJobInfo(wrapperNode) {
+  if (JOBINFO_SCRIPT_ANCHOR && JOBINFO_SCRIPT_ANCHOR.parentNode) {
+    JOBINFO_SCRIPT_ANCHOR.parentNode.insertBefore(wrapperNode, JOBINFO_SCRIPT_ANCHOR);
+    return;
+  }
+  // Fallback falls kein currentScript ermittelt werden konnte
+  document.body.appendChild(wrapperNode);
+}
+
+async function initJobInfoDesign() {
+  injectJobInfoStyles();
+  const jobId = debug_job || getJobReqIdFromUrl();
+  if (debug_job) console.log('[JOBINFO DEBUG] debug_job aktiv:', debug_job);
+  if (!jobId) { console.log('[JOBINFO DEBUG] Keine Job-ID gefunden.'); return; }
+  try {
+    const info = await fetchJobInfo(jobId);
+    console.log('[JOBINFO DEBUG] Info geladen:', info);
+    const dom = buildJobInfoDOM(info);
+    placeJobInfo(dom);
+  } catch (e) {
+    console.error('[JOBINFO DEBUG] Fehler beim Laden:', e);
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initJobInfoDesign);
+} else {
+  initJobInfoDesign();
+}
