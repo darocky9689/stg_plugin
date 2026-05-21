@@ -10,7 +10,7 @@
     desktopImageWidthPercent: 70,
     desktopOverlayWidthPercent: 40,
     fixedImageHeight: 482,
-    mobileImageHeight: 300,s
+    mobileImageHeight: 300,
     overlayHeightRatio: 0.97,
     mobileBreakpoint: 768,
     styleId: 'job-header-plugin-styles',
