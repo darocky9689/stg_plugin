@@ -8,7 +8,7 @@
     feedUrl: 'https://stiegemeyt1.valhalla55.stage.jobs2web.com/feed/430205',
     imageSelector: '.large-image-component',
     desktopImageWidthPercent: 70,
-    desktopOverlayWidthPercent: 44,
+    desktopOverlayWidthPercent: 50,
     fixedImageHeight: 482,
     mobileImageHeight: 300,
     overlayHeightRatio: 0.9,
