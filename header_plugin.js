@@ -7,6 +7,8 @@
   const CONFIG = {
     feedUrl: 'https://stiegemeyt1.valhalla55.stage.jobs2web.com/feed/430205',
     imageSelector: '.large-image-component',
+    desktopImageWidthPercent: 70,
+    desktopOverlayWidthPercent: 44,
     fixedImageHeight: 482,
     mobileImageHeight: 300,
     overlayHeightRatio: 0.9,
@@ -120,8 +122,8 @@
       }
 
       .jobtitle-image {
-        width: 70%;
-        flex: 0 0 70%;
+        width: ${CONFIG.desktopImageWidthPercent}%;
+        flex: 0 0 ${CONFIG.desktopImageWidthPercent}%;
         height: ${CONFIG.fixedImageHeight}px;
         min-height: ${CONFIG.fixedImageHeight}px;
         max-height: ${CONFIG.fixedImageHeight}px;
@@ -143,8 +145,8 @@
         position: absolute;
         right: 0;
         top: 50%;
-        width: 44%;
-        max-width: 44%;
+        width: ${CONFIG.desktopOverlayWidthPercent}%;
+        max-width: ${CONFIG.desktopOverlayWidthPercent}%;
         background: #395366;
         z-index: 2;
         display: flex;
@@ -263,11 +265,16 @@
 
   function setOverlayHeight(overlay, largeImage, isMobile) {
     if (isMobile) {
+      overlay.style.width = '';
+      overlay.style.maxWidth = '';
       overlay.style.height = '';
       overlay.style.maxHeight = '';
       overlay.style.minHeight = '';
       return;
     }
+
+    overlay.style.width = `${CONFIG.desktopOverlayWidthPercent}%`;
+    overlay.style.maxWidth = `${CONFIG.desktopOverlayWidthPercent}%`;
 
     const imgHeight = largeImage.offsetHeight;
     if (!imgHeight) {
