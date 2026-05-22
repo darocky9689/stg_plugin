@@ -11,7 +11,7 @@
     desktopOverlayWidthPercent: 40,
     fixedImageHeight: 482,
     mobileImageHeight: 300,
-    overlayHeightRatio: 0.97,
+    overlayHeightRatio: 0.90,
     mobileBreakpoint: 768,
     styleId: 'job-header-plugin-styles',
     initFlag: 'jobHeaderPluginInitialized',
@@ -230,7 +230,7 @@
           width: 100%;
           max-width: none;
           align-self: stretch;
-          margin-top: -14px;
+          margin-top: -26px;
           padding: 18px 16px;
           justify-content: flex-start;
           z-index: 3;
@@ -378,11 +378,7 @@
       const isMobile = window.innerWidth < CONFIG.mobileBreakpoint;
 
       if (isMobile) {
-        const imageWidth = largeImage.offsetWidth || largeImage.clientWidth || 0;
-        const circleSize = Math.min(100, Math.round(imageWidth * 0.15)) || 60;
-        circleEl = createLogoCircle(logoData, circleSize, { top: '-14px', right: '8px' });
-        largeImage.style.position = 'relative';
-        largeImage.appendChild(circleEl);
+        // On mobile, keep the header cleaner by hiding the floating logo.
         return;
       }
 
