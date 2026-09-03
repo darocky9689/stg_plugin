@@ -1,0 +1,24 @@
+{
+  "name": "stiegelmeyer_plugiins",
+  "version": "1.0.0",
+  "description": "",
+  "main": "benefits_plugin.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/darocky9689/stg_plugin.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/darocky9689/stg_plugin/issues"
+  },
+  "homepage": "https://github.com/darocky9689/stg_plugin#readme",
+  "devDependencies": {
+    "wrangler": "^4.128.0"
+  }
+}

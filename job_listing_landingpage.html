@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- ========================================================================
+       SEO META
+       Diese Seite wird SERVERSEITIG im CMS gerendert (www.stiegelmeyer-group.com).
+       Der Server liest den XML-Feed
+         https://job.stiegelmeyer-group.com/feed/435055
+       und ersetzt alle {{...}}-Platzhalter, BEVOR das HTML ausgeliefert wird.
+       So sieht der Crawler sofort vollstaendige Inhalte – ohne JS-Abhaengigkeit.
+       (Der optionale JS-Loader ganz unten ist NICHT noetig und kann fuer die
+       serverseitige Variante entfernt werden.)
+       ==================================================================== -->
+  <title>{{PAGE_TITLE}}</title>
+  <meta name="description" content="{{PAGE_DESCRIPTION}}">
+  <link rel="canonical" href="{{PAGE_CANONICAL_URL}}">
+
+  <!-- Open Graph / Social -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="{{PAGE_TITLE}}">
+  <meta property="og:description" content="{{PAGE_DESCRIPTION}}">
+  <meta property="og:url" content="{{PAGE_CANONICAL_URL}}">
+  <meta property="og:image" content="{{PAGE_OG_IMAGE}}">
+
+  <!-- ========================================================================
+       JSON-LD: ItemList
+       WICHTIG fuer SEO: Eine Uebersichts-/Landingpage bekommt KEIN vollstaendiges
+       JobPosting-Schema. Google erwartet das komplette JobPosting-JSON-LD auf der
+       jeweiligen DETAILSEITE (SF-Karriereseite, dort erledigt es
+       seo_jobposting_plugin.js). Die Listenseite verlinkt via ItemList auf jede
+       Detailseite.
+
+       SERVERSEITIG befuellen: pro Job GENAU EIN ListItem-Objekt in
+       "itemListElement" erzeugen (unten steht ein Beispiel-Objekt als Muster):
+         position = 1-basierter Index (1, 2, 3, ...)
+         url      = <url> aus dem Feed (absolute SF-Detail-URL)
+         name     = <title> aus dem Feed
+       Wichtig: gueltiges JSON ausgeben – Objekte mit Komma trennen, KEINE
+       Kommentare, das letzte Objekt OHNE Komma.
+       ==================================================================== -->
+  <script type="application/ld+json" id="job-list-jsonld">
+  {
+    "@context": "https://schema.org/",
+    "@type": "ItemList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "url": "{{JOB_URL}}", "name": "{{JOB_TITLE}}" }
+    ]
+  }
+  </script>
+
+  <style>
+    /* ======================================================================
+       DESIGN-TOKENS – zentral anpassbar (Markenfarben, Abstaende, Radius)
+       ==================================================================== */
+    :root {
+      --brand-primary: #003a5d;      /* dunkelblau (analog Header-Overlay) */
+      --brand-primary-dark: #002a44;
+      --brand-accent: #d0021b;
+      --text: #1a1a1a;
+      --text-muted: #5a6570;
+      --surface: #ffffff;
+      --surface-alt: #f4f6f8;
+      --border: #e2e6ea;
+      --radius: 10px;
+      --shadow: 0 2px 8px rgba(0, 40, 70, 0.08);
+      --shadow-hover: 0 6px 20px rgba(0, 40, 70, 0.15);
+      --maxw: 1120px;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      color: var(--text);
+      background: var(--surface-alt);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ---- Hero / Kopfbereich --------------------------------------------- */
+    .jl-hero {
+      background: linear-gradient(135deg, var(--brand-primary), var(--brand-primary-dark));
+      color: #fff;
+      padding: 56px 20px;
+    }
+    .jl-hero__inner { max-width: var(--maxw); margin: 0 auto; display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+    .jl-hero__logo { height: 48px; width: auto; }
+    .jl-hero__text h1 { margin: 0 0 8px; font-size: 2rem; line-height: 1.15; }
+    .jl-hero__text p { margin: 0; opacity: 0.9; max-width: 60ch; }
+
+    /* ---- Container & Toolbar -------------------------------------------- */
+    .jl-wrap { max-width: var(--maxw); margin: 0 auto; padding: 32px 20px 64px; }
+
+    .jl-toolbar {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 16px; flex-wrap: wrap; margin-bottom: 24px;
+    }
+    .jl-count { color: var(--text-muted); font-size: 0.95rem; }
+    .jl-search {
+      flex: 1 1 260px; max-width: 360px;
+      padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius);
+      font-size: 1rem; background: var(--surface);
+    }
+    .jl-search:focus { outline: 2px solid var(--brand-primary); border-color: var(--brand-primary); }
+
+    /* ---- Job-Liste (Grid) ----------------------------------------------- */
+    .jl-list {
+      list-style: none; margin: 0; padding: 0;
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px;
+    }
+
+    .jl-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      transition: box-shadow 0.18s ease, transform 0.18s ease;
+    }
+    .jl-card:hover { box-shadow: var(--shadow-hover); transform: translateY(-2px); }
+
+    /* Ganze Karte klickbar; Titel-Link traegt den semantischen Anker */
+    .jl-card__link {
+      display: block; padding: 20px 22px; text-decoration: none; color: inherit; height: 100%;
+    }
+    .jl-card__link:focus-visible { outline: 2px solid var(--brand-primary); outline-offset: 2px; border-radius: var(--radius); }
+
+    .jl-card__title { margin: 0 0 12px; font-size: 1.15rem; color: var(--brand-primary); line-height: 1.3; }
+    .jl-card:hover .jl-card__title { text-decoration: underline; }
+
+    .jl-meta { display: flex; flex-wrap: wrap; gap: 8px 14px; color: var(--text-muted); font-size: 0.9rem; }
+    .jl-meta__item { display: inline-flex; align-items: center; gap: 6px; }
+    .jl-meta__item svg { width: 15px; height: 15px; flex: 0 0 auto; opacity: 0.75; }
+
+    .jl-badge {
+      display: inline-block; margin-top: 14px; padding: 3px 10px;
+      background: var(--surface-alt); color: var(--brand-primary);
+      border-radius: 999px; font-size: 0.8rem; font-weight: 600;
+    }
+
+    /* ---- Leer-/Ladezustand ---------------------------------------------- */
+    .jl-empty {
+      grid-column: 1 / -1; text-align: center; padding: 48px 20px;
+      color: var(--text-muted); background: var(--surface);
+      border: 1px dashed var(--border); border-radius: var(--radius);
+    }
+
+    /* ---- Responsive ------------------------------------------------------ */
+    @media (max-width: 600px) {
+      .jl-hero { padding: 40px 18px; }
+      .jl-hero__text h1 { font-size: 1.5rem; }
+      .jl-list { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- ========================================================================
+       HERO
+       ==================================================================== -->
+  <header class="jl-hero">
+    <div class="jl-hero__inner">
+      <img class="jl-hero__logo"
+           src="https://www.stiegelmeyer-group.com/_assets/b8240a57c4b6735fe1567cb15f63534c/Images/stiegelmeyer-logo.svg"
+           alt="Stiegelmeyer Group">
+      <div class="jl-hero__text">
+        <h1>{{PAGE_HEADLINE}}</h1>
+        <p>{{PAGE_SUBLINE}}</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- ========================================================================
+       LISTE
+       ==================================================================== -->
+  <main class="jl-wrap">
+    <div class="jl-toolbar">
+      <span class="jl-count" id="jl-count" aria-live="polite">{{JOB_COUNT}} offene Stellen</span>
+      <input class="jl-search" id="jl-search" type="search"
+             placeholder="Nach Titel oder Ort suchen …" aria-label="Stellen durchsuchen">
+    </div>
+
+    <!-- <ol> = geordnete Liste, passt semantisch zur ItemList im JSON-LD -->
+    <ol class="jl-list" id="jl-list">
+
+      <!-- ==================================================================
+           JOB-ITEM-VORLAGE  (dieser Block wird pro Stelle wiederholt)
+           Fuer serverseitiges Templating: {{...}}-Tokens ersetzen und den
+           <li>-Block je Job duplizieren. Fuer den JS-Loader unten dient der
+           <template id="jl-item-template"> als Quelle – dieser statische Block
+           ist nur Referenz/Fallback und kann entfernt werden.
+
+           Feld-Mapping aus dem XML-Feed (<job>-Knoten):
+             {{JOB_URL}}       -> Detailseiten-URL  (Basis-Pfad + ID + Locale)
+             {{JOB_TITLE}}     -> <title>
+             {{JOB_LOCATION}}  -> <city> / <location>
+             {{JOB_UNIT}}      -> <businessunit>
+             {{JOB_SHIFTTYPE}} -> <shifttype>  (z.B. Vollzeit/Teilzeit)
+             {{JOB_ID}}        -> <ID>
+           ================================================================== -->
+      <li class="jl-card">
+        <a class="jl-card__link" href="{{JOB_URL}}">
+          <h2 class="jl-card__title">{{JOB_TITLE}}</h2>
+          <div class="jl-meta">
+            <span class="jl-meta__item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s-7-6.3-7-11a7 7 0 0 1 14 0c0 4.7-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+              {{JOB_LOCATION}}
+            </span>
+            <span class="jl-meta__item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              {{JOB_UNIT}}
+            </span>
+          </div>
+          <span class="jl-badge">{{JOB_SHIFTTYPE}}</span>
+        </a>
+      </li>
+      <!-- === ENDE JOB-ITEM-VORLAGE === -->
+
+    </ol>
+  </main>
+
+  <!-- ========================================================================
+       OPTIONAL: JS-LOADER
+       Liest denselben XML-Feed wie die anderen Plugins und rendert die Liste
+       + das ItemList-JSON-LD automatisch. Wer rein serverseitig rendert,
+       kann diesen gesamten <script>-Block loeschen.
+       ==================================================================== -->
+  <template id="jl-item-template">
+    <li class="jl-card">
+      <a class="jl-card__link" href="#">
+        <h2 class="jl-card__title"></h2>
+        <div class="jl-meta">
+          <span class="jl-meta__item" data-field="location">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s-7-6.3-7-11a7 7 0 0 1 14 0c0 4.7-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+            <span class="jl-meta__value"></span>
+          </span>
+          <span class="jl-meta__item" data-field="unit">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            <span class="jl-meta__value"></span>
+          </span>
+        </div>
+        <span class="jl-badge"></span>
+      </a>
+    </li>
+  </template>
+
+  <script>
+  (function () {
+    'use strict';
+
+    // ---- Konfiguration -----------------------------------------------------
+    var CONFIG = {
+      feedUrl: 'https://job.stiegelmeyer-group.com/feed/435055',
+      // Basis-Pfad der Detailseiten. Detail-URL = base + ID + '-' + locale
+      detailBaseUrl: 'https://job.stiegelmeyer-group.com/job/',
+      locale: 'de_DE',
+      timeoutMs: 12000
+    };
+
+    var listEl = document.getElementById('jl-list');
+    var tpl = document.getElementById('jl-item-template');
+    if (!listEl || !tpl) return;
+
+    function text(node, sel) {
+      var el = node.querySelector(sel);
+      return el && el.textContent ? el.textContent.trim() : '';
+    }
+
+    // Prozent-kodierte URLs (z.B. "f%C3%BCr" -> "für") lesbar machen.
+    // decodeURI statt decodeURIComponent: dekodiert Umlaute/Klammern, laesst
+    // aber reservierte Query-Zeichen (& = ? #) unangetastet. Funktional
+    // identisch, da der Browser beim Aufruf ohnehin wieder kodiert.
+    function decodeUrl(u) {
+      try { return decodeURI(u); } catch (e) { return u; }
+    }
+
+    function buildDetailUrl(job) {
+      // Bevorzugt eine im Feed hinterlegte URL, sonst aus ID + Locale bauen.
+      var direct = text(job, 'url') || text(job, 'link');
+      if (direct) return decodeUrl(direct);
+      var id = text(job, 'ID');
+      if (!id) return '#';
+      var numeric = (id.match(/^\d+/) || [id])[0];
+      return CONFIG.detailBaseUrl + numeric + '-' + CONFIG.locale;
+    }
+
+    async function fetchFeed(url) {
+      var controller = new AbortController();
+      var t = window.setTimeout(function () { controller.abort(); }, CONFIG.timeoutMs);
+      try {
+        var res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        var doc = new DOMParser().parseFromString(await res.text(), 'application/xml');
+        if (doc.querySelector('parsererror')) throw new Error('XML parse error');
+        return doc;
+      } finally { window.clearTimeout(t); }
+    }
+
+    function renderJob(job) {
+      var node = tpl.content.firstElementChild.cloneNode(true);
+      var url = buildDetailUrl(job);
+      var title = text(job, 'title');
+
+      node.querySelector('.jl-card__link').setAttribute('href', url);
+      node.querySelector('.jl-card__title').textContent = title;
+      node.querySelector('[data-field="location"] .jl-meta__value').textContent =
+        text(job, 'city') || text(job, 'location') || '—';
+      node.querySelector('[data-field="unit"] .jl-meta__value').textContent =
+        text(job, 'businessunit') || '—';
+
+      var shift = text(job, 'shifttype');
+      var badge = node.querySelector('.jl-badge');
+      if (shift) { badge.textContent = shift; } else { badge.remove(); }
+
+      // Datenattribute fuer die Live-Suche
+      node.setAttribute('data-search',
+        (title + ' ' + text(job, 'city') + ' ' + text(job, 'location')).toLowerCase());
+      return node;
+    }
+
+    function updateJsonLd(jobs) {
+      var el = document.getElementById('job-list-jsonld');
+      if (!el) return;
+      var items = jobs.map(function (job, i) {
+        return { '@type': 'ListItem', position: i + 1, url: buildDetailUrl(job), name: text(job, 'title') };
+      });
+      el.textContent = JSON.stringify({
+        '@context': 'https://schema.org/',
+        '@type': 'ItemList',
+        itemListElement: items
+      });
+    }
+
+    function wireSearch(count) {
+      var input = document.getElementById('jl-search');
+      var countEl = document.getElementById('jl-count');
+      if (!input) return;
+      input.addEventListener('input', function () {
+        var q = input.value.trim().toLowerCase();
+        var visible = 0;
+        listEl.querySelectorAll('.jl-card').forEach(function (card) {
+          var match = !q || (card.getAttribute('data-search') || '').indexOf(q) !== -1;
+          card.style.display = match ? '' : 'none';
+          if (match) visible++;
+        });
+        if (countEl) countEl.textContent = visible + ' von ' + count + ' offenen Stellen';
+      });
+    }
+
+    async function init() {
+      try {
+        var doc = await fetchFeed(CONFIG.feedUrl);
+        var jobs = Array.prototype.slice.call(doc.querySelectorAll('job'));
+
+        listEl.innerHTML = '';
+        if (!jobs.length) {
+          listEl.innerHTML = '<li class="jl-empty">Aktuell sind keine offenen Stellen ausgeschrieben.</li>';
+          return;
+        }
+
+        var frag = document.createDocumentFragment();
+        jobs.forEach(function (job) { frag.appendChild(renderJob(job)); });
+        listEl.appendChild(frag);
+
+        var countEl = document.getElementById('jl-count');
+        if (countEl) countEl.textContent = jobs.length + ' offene Stellen';
+
+        updateJsonLd(jobs);
+        wireSearch(jobs.length);
+      } catch (e) {
+        listEl.innerHTML = '<li class="jl-empty">Die Stellenliste konnte nicht geladen werden.</li>';
+        if (window.console && console.warn) console.warn('[Job-Landingpage] Fehler:', e);
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  })();
+  </script>
+
+</body>
+</html>

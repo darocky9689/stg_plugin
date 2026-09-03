@@ -13,6 +13,7 @@ const JOBINFO_ASSETS = {
   locationIcon: `${JOBINFO_CONFIG.assetsBase}/Icons/Jobs/Icon-Location.svg`,
   workloadIcon: `${JOBINFO_CONFIG.assetsBase}/Icons/Jobs/Icon-Workload.svg`,
   entryDateIcon: `${JOBINFO_CONFIG.assetsBase}/Icons/Jobs/Icon-EntryDate.svg`,
+  howryouLogo: 'https://rmkcdn.successfactors.com/70ccb92e/61920400-cd1b-4fd3-9830-a.png',
   burmeierLogo: `${JOBINFO_CONFIG.assetsBase}/Images/burmeier.svg`,
   stiegelmeyerLogo: `${JOBINFO_CONFIG.assetsBase}/Images/stiegelmeyer-logo.svg`
 };
@@ -37,20 +38,23 @@ function injectJobInfoStyles() {
   .jobinfodesign-wrapper {
     width:100%;
     display:flex;
-    justify-content:center;
+    justify-content:stretch;
     margin:42px 0 24px;
   }
   .jobinfodesign-inner {
+    --jobinfo-accent-blue:#395366;
+    --jobinfo-tile-bg:#ffffff;
     position:relative;
     overflow:hidden;
     display:flex;
+    flex-wrap:nowrap;
     gap:18px;
     padding:22px 20px;
-    background:#eef2f6;
-    border:1px solid #cfd9e2;
-    border-radius:8px;
-    box-shadow:0 4px 12px rgba(0, 30, 60, 0.08);
-    max-width:1080px;
+    background:transparent;
+    border:0;
+    border-radius:0;
+    box-shadow:none;
+    max-width:none;
     width:100%;
     box-sizing:border-box;
     font-family:inherit;
@@ -63,30 +67,33 @@ function injectJobInfoStyles() {
     left:0;
     right:0;
     top:0;
-    height:3px;
-    background:#003269;
+    display:none;
   }
   .jobinfodesign-item {
     display:flex;
     flex-direction:column;
+    justify-content:center;
+    gap:4px;
     min-width:0;
     flex:1 1 0;
     align-items:center;
     text-align:center;
-    background:#ffffff;
-    border:1px solid #d9e1e8;
+    background:var(--jobinfo-tile-bg);
+    border:2px solid var(--jobinfo-accent-blue);
     border-radius:8px;
-    padding:14px 10px 12px;
+    box-shadow:0 2px 6px rgba(0, 35, 75, 0.10);
+    padding:14px 12px;
+    min-height:168px;
     animation:jobinfo-fade-up .28s ease-out both;
   }
-  .jobinfodesign-item.company { flex:1.1 1 0; }
+  .jobinfodesign-item.company { flex:1 1 0; }
   .jobinfodesign-item:nth-child(2) { animation-delay:.04s; }
   .jobinfodesign-item:nth-child(3) { animation-delay:.08s; }
   .jobinfodesign-item:nth-child(4) { animation-delay:.12s; }
   .jobinfodesign-icon {
     width:38px;
     height:38px;
-    margin-bottom:8px;
+    margin-bottom:0;
     object-fit:contain;
     background:#003269;
     border-radius:50%;
@@ -101,22 +108,26 @@ function injectJobInfoStyles() {
     text-transform:uppercase;
     font-weight:700;
     color:#5f7282;
-    margin-bottom:4px;
+    margin-bottom:0;
   }
   .jobinfodesign-value {
+    display:flex;
+    align-items:center;
+    justify-content:center;
     font-size:14px;
     font-weight:600;
     line-height:1.3;
     color:#1f2f3d;
     word-break:break-word;
+    min-height:36px;
     max-width:220px;
   }
   .jobinfodesign-companylogo {
-    width:98px;
-    max-width:120px;
-    height:auto;
+    width:auto;
+    max-width:148px;
+    height:44px;
     object-fit:contain;
-    margin-top:5px;
+    margin-top:0;
   }
 
   @keyframes jobinfo-fade-up {
@@ -138,7 +149,7 @@ function injectJobInfoStyles() {
     .jobinfodesign-inner {
       flex-wrap:wrap;
       gap:10px;
-      border-radius:8px;
+      border-radius:0;
     }
     .jobinfodesign-item {
       flex:1 1 calc(50% - 8px);
@@ -232,7 +243,8 @@ function buildJobInfoDOM(info) {
   const companyLabel = document.createElement('div'); companyLabel.className = 'jobinfodesign-label'; companyLabel.textContent = 'Unternehmen';
   const companyLogo = document.createElement('img');
   const bu = (info.businessUnit || '').toLowerCase();
-  if (bu.includes('burmeier')) { companyLogo.src = JOBINFO_ASSETS.burmeierLogo; companyLogo.alt = 'Burmeier'; }
+  if (bu.includes('howryou')) { companyLogo.src = JOBINFO_ASSETS.howryouLogo; companyLogo.alt = 'HowRyou'; }
+  else if (bu.includes('burmeier')) { companyLogo.src = JOBINFO_ASSETS.burmeierLogo; companyLogo.alt = 'Burmeier'; }
   else { companyLogo.src = JOBINFO_ASSETS.stiegelmeyerLogo; companyLogo.alt = 'Stiegelmeyer'; }
   companyLogo.className = 'jobinfodesign-companylogo';
   companyItem.appendChild(companyIcon);
