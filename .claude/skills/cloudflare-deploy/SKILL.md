@@ -1,14 +1,22 @@
 ---
 name: cloudflare-deploy
-description: Deploys the plugin JS files to the Cloudflare Pages project "stgm-plugin" and verifies the live result. Use whenever the user asks to upload, deploy, push, or publish files to Cloudflare — e.g. "upload zu cloudflare", "auf cloudflare deployen", "nach cloudflare hochladen", "deploy to cloudflare", "push to production", "live stellen". Also use proactively after finishing an edit to a plugin file if the user then asks to publish/see it live.
+description: Deploys the built plugin files (plugin.js + seo.js) for a given environment (test or live) to the Cloudflare Pages project "stgm-plugin" and verifies the live result. Use whenever the user asks to upload, deploy, push, or publish files to Cloudflare — e.g. "upload zu cloudflare", "auf cloudflare deployen", "nach cloudflare hochladen", "deploy to cloudflare", "push to production", "live stellen", "ins Test-System deployen". Also use proactively after finishing an edit to a plugin file if the user then asks to publish/see it live.
 ---
 
 # Cloudflare Deploy
 
-Deploys static plugin `.js` files (and `_headers`) from this repo to the Cloudflare
-Pages project **stgm-plugin** (`stgm-plugin.pages.dev`, account `b501a9b0e68baf3dc17d40bc92ce17c2`),
-and verifies the upload actually landed correctly. Always run both the upload and the
-verification — an upload without verification is not considered done.
+Deploys the built environment output (`environments/<env>/plugin.js`, `environments/<env>/seo.js`,
+`environments/<env>/_headers`) to the Cloudflare Pages project **stgm-plugin**
+(account `b501a9b0e68baf3dc17d40bc92ce17c2`), and verifies the upload actually landed correctly.
+Always run both the upload and the verification — an upload without verification is not
+considered done.
+
+There are exactly two environments, each mapped to its own Cloudflare Pages branch/URL:
+
+| Environment | Pages branch  | Live URL                              |
+|-------------|---------------|----------------------------------------|
+| `test`      | `--branch=test` | `https://test.stgm-plugin.pages.dev`  |
+| `live`      | `--branch=main` | `https://stgm-plugin.pages.dev`       |
 
 ## Prerequisites
 
@@ -19,64 +27,62 @@ verification — an upload without verification is not considered done.
   that fails, stop and tell the user the Cloudflare connection needs to be re-established
   before deploying.
 
-## Which files to deploy
+## Which environment to deploy
 
-Only deploy files that are actually meant to go live — never the whole repo (it also
-contains `feed_local.xml`, `*.pdf`, `_preview_local.html`, `z_old/`, debug scripts etc.,
-none of which belong on Cloudflare).
+Ask (or infer from the request) whether this is a `test` or `live` deploy — if unclear,
+ask. `test` is safe to deploy freely (development system). `live` is the real production
+career site — always show the user which environment is about to be deployed before running
+step 3, unless they've already named it explicitly (naming it *is* the confirmation).
 
-Default target: whichever plugin file(s) the user is referring to (usually the one just
-edited). If unclear, ask. Historically the single bundle actually served in production is
-`stiegelmeyer_plugin.js`, always deployed together with `_headers` (Cloudflare Pages reads
-`_headers` from the deploy root to set `Content-Type`/`Cache-Control`). If a different or
-additional plugin file (e.g. `header_plugin.js`, `jobInfo_plugin.js`, `benefits_plugin.js`,
-`seo_jobposting_plugin.js`) is being deployed for the first time, check whether `_headers`
-needs a matching entry and flag it to the user if it doesn't.
+The source files are always **generated**, never hand-edited: run the build first so the
+deploy reflects the current `src/` state.
+
+```bash
+node scripts/build.js <test|live>
+```
 
 ## Steps
 
 **1. Pre-flight syntax check**
 
-For every `.js` file about to be deployed:
 ```bash
-node --check <file>
+node --check environments/<env>/plugin.js
+node --check environments/<env>/seo.js
 ```
-If any file fails this, stop and report the syntax error — do not deploy broken JS.
+If either fails, stop and report the syntax error — do not deploy broken JS.
 
-**2. Stage a clean deploy directory**
+**2. Deploy**
 
-Never deploy straight from the repo root (it would upload unrelated files). Build an
-isolated staging dir with only the target files:
+`environments/<env>/` already contains exactly the deploy root (`plugin.js`, `seo.js`,
+`_headers` — nothing else), so it can be deployed directly, no staging copy needed:
+
 ```bash
-STAGE=$(mktemp -d)
-cp <file1> <file2> ... _headers "$STAGE"/
+npx wrangler pages deploy "environments/<env>" --project-name=stgm-plugin --branch=<main|live-branch> --commit-dirty=true
 ```
+Use `--branch=main` for `live`, `--branch=test` for `test`.
 
-**3. Deploy**
+**3. Verify (Prüfung) — required, not optional**
+
 ```bash
-npx wrangler pages deploy "$STAGE" --project-name=stgm-plugin --branch=main --commit-dirty=true
-```
+BASE_URL="https://stgm-plugin.pages.dev"        # live
+# BASE_URL="https://test.stgm-plugin.pages.dev" # test
 
-**4. Verify (Prüfung) — required, not optional**
-
-For each deployed file, confirm it is actually live and byte-identical to what was staged:
-```bash
-for f in <file1> <file2> ...; do
+for f in plugin.js seo.js; do
   echo "== $f =="
-  curl -sI "https://stgm-plugin.pages.dev/$f" | head -5
-  diff <(curl -s "https://stgm-plugin.pages.dev/$f") "$STAGE/$f" \
+  curl -sI "$BASE_URL/$f" | head -5
+  diff <(curl -s "$BASE_URL/$f") "environments/<env>/$f" \
     && echo "OK: live matches staged file" \
     || echo "MISMATCH: live content differs from what was just deployed"
 done
 ```
 Check that:
 - HTTP status is `200`
-- `Content-Type` matches what `_headers` specifies (e.g. `application/javascript; charset=utf-8`)
+- `Content-Type` matches what `_headers` specifies (`application/javascript; charset=utf-8`)
 - The `diff` reports no difference (Cloudflare Pages deploys can take a few seconds to
   propagate — if the diff fails immediately after deploy, wait ~5s and retry once before
   treating it as a real mismatch)
 
-**5. Report**
+**4. Report**
 
 Tell the user, per file: deployed ✅/❌, live URL, verification result. If anything failed
 (syntax error, deploy error, mismatch after retry), stop and surface it clearly instead of
@@ -84,7 +90,11 @@ declaring success.
 
 ## Notes
 
-- This pushes to the live production career site — always show the user which file(s) are
-  about to be deployed before running step 3, unless they've already named the exact
-  file(s) in their request (naming the file *is* the confirmation).
-- Clean up the staging dir after verification: `rm -rf "$STAGE"`.
+- `test` and `live` are built from the **same `src/`** — the only difference between them is
+  the feed configuration in `config/test.json` / `config/live.json`. Never hand-edit
+  `environments/*/plugin.js` or `environments/*/seo.js` directly; edit `src/` and rebuild.
+- Deploying to `live` pushes to the real production career site — treat it with the same
+  care the old workflow implied, even though it's now scripted.
+- To promote the currently-proven `test` state to `live` in one guided step (rebuild, deploy,
+  verify, leave a record), use the `promote-test-to-live` skill instead of running this skill
+  twice by hand.

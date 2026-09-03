@@ -2,8 +2,10 @@
   "name": "stiegelmeyer_plugiins",
   "version": "1.0.0",
   "description": "",
-  "main": "benefits_plugin.js",
   "scripts": {
+    "build:test": "node scripts/build.js test",
+    "build:live": "node scripts/build.js live",
+    "build": "node scripts/build.js all",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
