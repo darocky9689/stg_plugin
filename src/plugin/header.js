@@ -758,8 +758,11 @@
       /* Company logo — white card echoing the same geometric shape (top-left +
          bottom-right rounded corners) used by the header speech bubble/button. */
       .sg-cta-logo         { width:130px; height:auto; object-fit:contain; background:#fff; border-radius:14px 0 14px 0; padding:18px 24px; box-sizing:border-box; box-shadow:0 6px 16px rgba(0,30,60,0.18); }
-      /* SF apply button as a "speech bubble" — same shape as the header BE bubble. */
-      .sg-cta-apply-col a,.sg-cta-apply-col button,.sg-cta-apply-col input { position:relative; display:inline-block; background:${CONFIG.blue} !important; color:#fff !important; -webkit-text-fill-color:#fff !important; border:0 !important; padding:18px 48px !important; border-radius:18px 0 18px 0 !important; font-weight:800 !important; font-size:1.2em !important; letter-spacing:.4px; text-transform:uppercase; text-decoration:none !important; cursor:pointer; box-shadow:0 6px 16px rgba(0,30,60,0.22); transition:transform .12s ease, box-shadow .12s ease; }
+      /* SF apply button as a "speech bubble" — same shape as the header BE bubble.
+         SF's theme pins the button (and its wrappers) to a fixed 240px, which
+         clips our padding → let it size to its one-line label instead. */
+      .sg-cta-apply-col .applylink,.sg-cta-apply-col .btn-social-apply { width:auto !important; }
+      .sg-cta-apply-col a,.sg-cta-apply-col button,.sg-cta-apply-col input { position:relative; display:inline-block; width:auto !important; white-space:nowrap; background:${CONFIG.blue} !important; color:#fff !important; -webkit-text-fill-color:#fff !important; border:0 !important; padding:18px 48px !important; border-radius:18px 0 18px 0 !important; font-weight:800 !important; font-size:1.2em !important; letter-spacing:.4px; text-transform:uppercase; text-decoration:none !important; cursor:pointer; box-shadow:0 6px 16px rgba(0,30,60,0.22); transition:transform .12s ease, box-shadow .12s ease; }
       .sg-cta-apply-col a::after,.sg-cta-apply-col button::after { content:''; position:absolute; bottom:-15px; left:0; width:0; height:0; border-top:15px solid ${CONFIG.blue}; border-right:22px solid transparent; }
       .sg-cta-apply-col a:hover,.sg-cta-apply-col button:hover { transform:translateY(-1px); box-shadow:0 9px 22px rgba(0,30,60,0.28); }
       @media (max-width: ${CONFIG.mobileBreakpoint}px) {
@@ -770,7 +773,8 @@
         .sg-cta-contact-row { justify-content:center; }
         .sg-cta-contact-text, .sg-cta-contact-text * { text-align:left !important; }
         .sg-cta-action { flex-direction:column; align-items:center; border-left:0; padding-left:0; padding-top:24px; border-top:1px solid rgba(20,42,70,0.18); width:100%; }
-        .sg-cta-apply-col a,.sg-cta-apply-col button,.sg-cta-apply-col input { width:100%; text-align:center; padding:16px 24px !important; }
+        .sg-cta-apply-col, .sg-cta-apply-col .applylink,.sg-cta-apply-col .btn-social-apply { width:100% !important; }
+        .sg-cta-apply-col a,.sg-cta-apply-col button,.sg-cta-apply-col input { width:100% !important; text-align:center; padding:16px 24px !important; white-space:normal; }
         .sg-cta-logo { width:110px; padding:16px 20px; }
       }
     `);
