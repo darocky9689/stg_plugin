@@ -20,7 +20,7 @@ const ENVIRONMENTS_DIR = path.join(ROOT, 'environments');
 // Reihenfolge ist bewusst: jedes Modul ist eine eigene, gekapselte IIFE ohne
 // geteilte Namen (außer dem absichtlichen window.__sgFeedCache), daher spielt
 // die Reihenfolge für die Funktion keine Rolle — nur für die Lesbarkeit.
-const PLUGIN_MODULES = ['header.js', 'jobinfo.js', 'benefits.js'];
+const PLUGIN_MODULES = ['header.js', 'jobinfo.js'];
 
 const TOKEN_PATTERN = /__[A-Z_]+__/g;
 
@@ -32,13 +32,14 @@ function loadConfig(env) {
   const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
   return {
     ...config,
+    // Nur für die Build-Ausgabe; die Module setzen die URL zur Laufzeit aus
+    // __FEED_BASE_URL__ + (?feedId=… oder __DEFAULT_FEED_ID__) zusammen.
     feedUrl: config.feedBaseUrl + config.defaultFeedId,
   };
 }
 
 function applyTokens(content, config, sourceFile) {
   const tokenValues = {
-    __FEED_URL__: config.feedUrl,
     __FEED_BASE_URL__: config.feedBaseUrl,
     __DEFAULT_FEED_ID__: config.defaultFeedId,
   };

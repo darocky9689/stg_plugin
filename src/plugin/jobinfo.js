@@ -18,6 +18,13 @@
   var JOBINFO_STYLE_ID = 'jobinfodesign-style';
   var SCRIPT_ANCHOR = document.currentScript; // Positionierungsanker
   var ASSETS = 'https://www.stiegelmeyer-group.com/_assets/b8240a57c4b6735fe1567cb15f63534c/';
+  // Kein eigenes Icon im Asset-Set für die Vertragsart -> Inline-SVG (Dokument),
+  // gleiche Bildsprache (weißes Glyphen auf dem blauen Kreis) wie die anderen Icons.
+  var CONTRACT_ICON = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#ffffff">' +
+    '<path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm7 1.5V8h4.5L13 3.5zM8 13h8v1.5H8V13zm0 3.5h8V18H8v-1.5zm0-7h4V11H8V9.5z"/>' +
+    '</svg>'
+  );
 
   function loadFeed(url) {
     var cache = (window.__sgFeedCache = window.__sgFeedCache || {});
@@ -84,8 +91,10 @@
     var style = document.createElement('style');
     style.id = JOBINFO_STYLE_ID;
     style.textContent = `
+    /* Gleiche Schrift wie header.js (CONFIG.font) – !important, da das SF-Theme sonst gewinnt. */
+    body #sg-jobinfo-root, body #sg-jobinfo-root * { font-family:Arial, Helvetica, sans-serif !important; }
     .jobinfodesign-wrapper { width:100%; display:flex; justify-content:center; margin:40px 0 24px; }
-    .jobinfodesign-inner { display:flex; gap:48px; padding:32px 48px; background:#ffffff; max-width:1200px; width:100%; box-sizing:border-box; font-family:inherit; justify-content:center; }
+    .jobinfodesign-inner { display:flex; gap:48px; padding:32px 48px; background:#ffffff; max-width:1200px; width:100%; box-sizing:border-box; justify-content:center; }
     .jobinfodesign-item { display:flex; flex-direction:column; min-width:150px; position:relative; align-items:center; text-align:center; }
     .jobinfodesign-item.company { min-width:150px; }
     .jobinfodesign-item:not(:last-child):after { content:''; position:absolute; top:8px; right:-20px; width:1px; height:calc(100% - 16px); background:#dbe3ea; }
@@ -114,6 +123,16 @@
     document.head.appendChild(style);
   }
 
+  // Feed <department> trägt die Vertragsart, z.B. "Unbefristeter Arbeitsvertrag",
+  // "Befristeter Arbeitsvertrag" oder "Fixed Term Contract" (analog header.js
+  // resolveContractWord). "unbefristet" zuerst prüfen, da "befristet" darin enthalten ist.
+  function resolveContractType(department) {
+    var d = (department || '').toLowerCase();
+    if (d.indexOf('unbefristet') !== -1) return 'Unbefristet';
+    if (d.indexOf('befristet') !== -1 || d.indexOf('fixed term') !== -1) return 'Befristet';
+    return '';
+  }
+
   async function fetchJobInfo(jobId) {
     var xmlDoc = await loadFeed(getFeedUrl());
     var job = findJobNode(xmlDoc, jobId);
@@ -122,11 +141,15 @@
       businessUnit: text(job, 'businessunit'),
       location: text(job, 'location'),
       shifttype: text(job, 'shifttype'),
-      entryDate: text(job, 'customfield5')
+      entryDate: text(job, 'customfield5'),
+      contractType: resolveContractType(text(job, 'department'))
     };
   }
 
+  // Gibt null zurück, wenn kein Wert vorhanden ist -> Kachel wird beim Aufbau
+  // komplett übersprungen, statt einen Platzhalter ("-") anzuzeigen.
   function createItem(iconUrl, label, value, extraClass) {
+    if (!value || !value.trim()) return null;
     var wrap = document.createElement('div');
     wrap.className = 'jobinfodesign-item ' + (extraClass || '');
     var icon = document.createElement('img');
@@ -135,13 +158,13 @@
     l.className = 'jobinfodesign-label'; l.textContent = label;
     var v = document.createElement('div');
     v.className = 'jobinfodesign-value';
-    v.textContent = value && value.trim() !== '' ? value : '-';
+    v.textContent = value.trim();
     wrap.appendChild(icon); wrap.appendChild(l); wrap.appendChild(v);
     return wrap;
   }
 
   function buildJobInfoDOM(info) {
-    var outer = document.createElement('div'); outer.className = 'jobinfodesign-wrapper';
+    var outer = document.createElement('div'); outer.className = 'jobinfodesign-wrapper'; outer.id = 'sg-jobinfo-root';
     var inner = document.createElement('div'); inner.className = 'jobinfodesign-inner';
 
     // Unternehmen: Icon + Label + markenabhängiges Logo
@@ -171,15 +194,45 @@
     companyItem.appendChild(companyLogo);
     inner.appendChild(companyItem);
 
-    inner.appendChild(createItem(ASSETS + 'Icons/Jobs/Icon-Location.svg', 'Standort', info.location));
-    inner.appendChild(createItem(ASSETS + 'Icons/Jobs/Icon-Workload.svg', 'Auslastung', info.shifttype));
-    inner.appendChild(createItem(ASSETS + 'Icons/Jobs/Icon-EntryDate.svg', 'Einstiegsdatum', info.entryDate));
+    [
+      createItem(ASSETS + 'Icons/Jobs/Icon-Location.svg', 'Standort', info.location),
+      createItem(ASSETS + 'Icons/Jobs/Icon-Workload.svg', 'Auslastung', info.shifttype),
+      createItem(CONTRACT_ICON, 'Vertragsart', info.contractType),
+      createItem(ASSETS + 'Icons/Jobs/Icon-EntryDate.svg', 'Einstiegsdatum', info.entryDate)
+    ].forEach(function (item) { if (item) inner.appendChild(item); });
 
     outer.appendChild(inner);
     return outer;
   }
 
-  function placeJobInfo(wrapperNode) {
+  // header.js baut #sg-header-root asynchron aus seinem eigenen Feed-Request.
+  // Beide Module würden ohne diese Wartelogik gegen denselben Anker
+  // (SCRIPT_ANCHOR / SCRIPT_EL, da im selben plugin.js-Bundle) um die
+  // Einfügeposition konkurrieren – je nachdem, welcher fetch()/Parse-Vorgang
+  // zuerst fertig ist, landen die Kacheln mal vor, mal nach den anderen
+  // Blöcken. Fix: gezielt auf #sg-header-root warten und immer direkt danach
+  // einfügen, statt auf das racende Script-Tag zu zielen.
+  function waitForHeaderRoot(timeoutMs) {
+    return new Promise(function (resolve) {
+      var existing = document.getElementById('sg-header-root');
+      if (existing) { resolve(existing); return; }
+      var elapsed = 0;
+      var interval = window.setInterval(function () {
+        var el = document.getElementById('sg-header-root');
+        elapsed += 50;
+        if (el || elapsed >= timeoutMs) {
+          window.clearInterval(interval);
+          resolve(el);
+        }
+      }, 50);
+    });
+  }
+
+  function placeJobInfo(wrapperNode, headerRoot) {
+    if (headerRoot && headerRoot.parentNode) {
+      headerRoot.parentNode.insertBefore(wrapperNode, headerRoot.nextSibling);
+      return;
+    }
     if (SCRIPT_ANCHOR && SCRIPT_ANCHOR.parentNode) {
       SCRIPT_ANCHOR.parentNode.insertBefore(wrapperNode, SCRIPT_ANCHOR);
       return;
@@ -195,7 +248,8 @@
     try {
       var info = await fetchJobInfo(jobId);
       if (!info) return; // Job nicht im Feed -> nichts anzeigen
-      placeJobInfo(buildJobInfoDOM(info));
+      var headerRoot = await waitForHeaderRoot(4000);
+      placeJobInfo(buildJobInfoDOM(info), headerRoot);
     } catch (e) {
       if (window.console && console.warn) console.warn('[JOBINFO] Fehler beim Laden:', e);
     }

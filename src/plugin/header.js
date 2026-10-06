@@ -11,14 +11,28 @@
 
   const SCRIPT_EL = document.currentScript;
 
+  const DEFAULT_FEED_ID = '__DEFAULT_FEED_ID__';
+  const FEED_TIMEOUT_MS = 12000;
+
   const CONFIG = {
-    feedUrl: '__FEED_URL__',
     heroImageUrl: 'https://rmkcdn.successfactors.com/70ccb92e/8151d114-670e-4cd9-9de1-a.png',
     sfHeroSelector: '.large-image-component', // SF component to hide after we build our own header
     mobileBreakpoint: 768,
     blue: '#395366',
     yellow: '#F5C200',
+    // The one typeface for everything the plugin renders (jobinfo.js uses the same stack).
+    font: 'Arial, Helvetica, sans-serif',
+    assets: 'https://www.stiegelmeyer-group.com/_assets/b8240a57c4b6735fe1567cb15f63534c/',
   };
+
+  // Markenlogik analog zu jobinfo.js / seo.js — HowRyou hat keine eigene
+  // Grafik und fällt wie überall sonst auf das Stiegelmeyer-Logo zurück.
+  function resolveCompanyLogo(businessUnit) {
+    const bu = (businessUnit || '').toLowerCase();
+    return bu.includes('burmeier')
+      ? { src: CONFIG.assets + 'Images/burmeier.svg', alt: 'Burmeier' }
+      : { src: CONFIG.assets + 'Images/stiegelmeyer-logo.svg', alt: 'Stiegelmeyer' };
+  }
 
   // ── Utilities ──────────────────────────────────────────────────────────────
 
@@ -30,13 +44,64 @@
     document.head.appendChild(s);
   }
 
+  // Shared base for every block this module renders (all carry .sg-root):
+  // one typeface, one body text size, and ONE section-heading style
+  // (.sg-heading) — no matter whether the text is our own or cloned from the
+  // feed / SF layout tokens. !important because SF's theme CSS would
+  // otherwise win over these on the career site. Anchored on the root IDs
+  // (`body #id`) so that even theme rules like `.jobdisplay h2 {…!important}`
+  // are outranked by specificity, not just by load order.
+  const ROOTS = 'body :is(#sg-header-root, #sg-body-root, #sg-benefits-root, #sg-cta-root)';
+  function injectBaseStyle() {
+    injectStyle('sg-base-style', `
+      ${ROOTS}, ${ROOTS} * { font-family: ${CONFIG.font} !important; }
+      .sg-root { font-size: 16px; line-height: 1.6; color: #22323f; }
+      ${ROOTS} .sg-heading {
+        display: block; font-size: 1.15em !important; font-weight: 700 !important; font-style: normal !important;
+        line-height: 1.3 !important; letter-spacing: normal !important; text-transform: uppercase !important;
+        text-align: left !important; color: ${CONFIG.blue} !important; -webkit-text-fill-color: ${CONFIG.blue} !important;
+        background: none !important; margin: 0 0 14px !important; padding: 0 0 8px !important;
+        border: 0 !important; border-bottom: 3px solid ${CONFIG.yellow} !important;
+      }
+      /* A heading that follows content needs air above it (first ones sit flush). */
+      ${ROOTS} .sg-heading:not(:first-child) { margin-top: 28px !important; }
+    `);
+  }
+
+  // Feed + SF rich text carries the editor's inline typography (Aptos,
+  // Calibri, 11pt, <font face> …). Strip it from every cloned node so the
+  // cloned text renders exactly like our own. Nested headings get the shared
+  // heading style (pass headings=false where they'd sit on a dark/hero area).
+  const FOREIGN_TYPE_PROPS = ['font', 'font-family', 'font-size', 'line-height', 'letter-spacing'];
+  function cleanClone(el, headings = true) {
+    const clone = el.cloneNode(true);
+    const all = [clone, ...clone.querySelectorAll('*')];
+    all.forEach(n => {
+      if (n.style && n.style.length) {
+        FOREIGN_TYPE_PROPS.forEach(prop => n.style.removeProperty(prop));
+        if (!n.style.length) n.removeAttribute('style');
+      }
+      if (n.tagName === 'FONT') { n.removeAttribute('face'); n.removeAttribute('size'); }
+      if (headings && /^H[1-6]$/.test(n.tagName)) n.classList.add('sg-heading');
+    });
+    return clone;
+  }
+
+  // Our own section heading (always <h2> for a consistent outline).
+  const sgHeading = (text, extraClass = '') =>
+    mk('h2', { className: ('sg-heading ' + extraClass).trim(), textContent: text });
+
   function getJobId() {
     try {
-      const { pathname } = new URL(window.location.href);
-      const m = pathname.match(/\/(\d+-[a-z]{2}_[A-Z]{2})\/?$/);
-      return m ? m[1] : null;
-    } catch { return null; }
+      const segments = new URL(window.location.href).pathname.split('/').filter(Boolean);
+      for (let i = segments.length - 1; i >= 0; i--) {
+        if (/^\d+(?:-[a-z]{2,3}(?:_[a-z]{2,4})+)?$/i.test(segments[i])) return segments[i];
+      }
+    } catch {}
+    return null;
   }
+
+  const numericId = id => (String(id || '').match(/^(\d+)/) || [])[1] || null;
 
   function nodeText(parent, sel) {
     const n = parent ? parent.querySelector(sel) : null;
@@ -62,7 +127,7 @@
   // (e.g. "<p>&nbsp;</p>") that would otherwise render as orphaned gaps.
   const isBlank = el => !el.textContent.trim() && !el.querySelector('img');
   const appendClones = (parent, nodes) =>
-    nodes.forEach(el => { if (!isBlank(el)) parent.appendChild(el.cloneNode(true)); });
+    nodes.forEach(el => { if (!isBlank(el)) parent.appendChild(cleanClone(el)); });
 
   // Tag the equal-opportunity / diversity statement so CSS can highlight it.
   const markDiversity = container =>
@@ -206,26 +271,44 @@
 
   // ── Feed ───────────────────────────────────────────────────────────────────
 
-  let _feedPromise = null;
-
-  function getFeed() {
-    if (!_feedPromise) {
-      _feedPromise = fetch(CONFIG.feedUrl, { cache: 'no-store' })
-        .then(r => { if (!r.ok) throw new Error(`Feed HTTP ${r.status}`); return r.text(); })
-        .then(xml => {
-          const doc = new DOMParser().parseFromString(xml, 'application/xml');
-          if (doc.querySelector('parsererror')) throw new Error('Feed XML parse error');
-          return doc;
-        });
-    }
-    return _feedPromise;
+  // Same feed source as jobinfo.js / seo.js: ?feedId=… overrides the default.
+  function getFeedUrl() {
+    let feedId = null;
+    try { feedId = new URL(window.location.href).searchParams.get('feedId'); } catch {}
+    if (!/^\d+$/.test(String(feedId || ''))) feedId = DEFAULT_FEED_ID;
+    return '__FEED_BASE_URL__' + feedId;
   }
 
+  // URL-keyed cache shared with the other modules → the feed is fetched once
+  // per page load. A failed request is evicted so a later caller can retry.
+  function loadFeed(url) {
+    const cache = (window.__sgFeedCache = window.__sgFeedCache || {});
+    if (!cache[url]) {
+      cache[url] = (async () => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), FEED_TIMEOUT_MS);
+        try {
+          const res = await fetch(url, { signal: controller.signal });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const doc = new DOMParser().parseFromString(await res.text(), 'application/xml');
+          if (doc.querySelector('parsererror')) throw new Error('Feed-Antwort ist kein gültiges XML.');
+          return doc;
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      })();
+      cache[url].catch(() => { delete cache[url]; });
+    }
+    return cache[url];
+  }
+
+  // Match on the numeric part only ("603-de_DE" ↔ "603"), like the other modules.
   function findJobNode(xmlDoc, jobId) {
-    if (!xmlDoc || !jobId) return null;
+    const target = numericId(jobId);
+    if (!xmlDoc || !target) return null;
     for (const job of xmlDoc.querySelectorAll('job')) {
       const id = job.querySelector('ID');
-      if (id && id.textContent.trim() === jobId) return job;
+      if (id && numericId(id.textContent.trim()) === target) return job;
     }
     return null;
   }
@@ -240,8 +323,9 @@
       || jobNode.querySelector('body');
     if (!descEl) return null;
 
-    const temp = document.createElement('div');
-    temp.innerHTML = descEl.textContent;
+    // Parse into an inert document: unlike innerHTML on a live-document <div>,
+    // this never loads images or fires inline handlers (e.g. <img onerror>).
+    const temp = new DOMParser().parseFromString(descEl.textContent, 'text/html').body;
     const blocks = flattenBlocks(temp);
 
     const out = emptySections();
@@ -326,7 +410,6 @@
         position: relative;
         width: 100%;
         overflow: hidden;
-        font-family: Arial, sans-serif;
         font-size: 16px;
       }
       /* Background image – fills the root container */
@@ -363,10 +446,9 @@
       .sg-header-top {
         display: flex;
         justify-content: space-between;
-        align-items: flex-start;
+        align-items: center;
         gap: 40px;
         flex: 1;
-        align-items: center;
       }
       .sg-header-left {
         flex: 1;
@@ -378,7 +460,6 @@
         max-width: 720px;
         color: #fff !important;
         -webkit-text-fill-color: #fff;
-        font-family: Arial, sans-serif;
         font-weight: 700;
         font-size: 1.5em; /* 24px on the 16px header base */
         line-height: 1.4;
@@ -387,7 +468,6 @@
         margin: 0;
         color: #fff !important;
         -webkit-text-fill-color: #fff;
-        font-family: Arial, sans-serif;
         font-weight: 800;
         font-size: 3.2em;
         line-height: 1.1;
@@ -400,7 +480,6 @@
         margin: 16px 0 0;
         color: #fff !important;
         -webkit-text-fill-color: #fff;
-        font-family: Arial, sans-serif;
         font-weight: 700;
         font-size: 1.5em;
         line-height: 1.2;
@@ -410,7 +489,6 @@
         position: relative;
         background: ${CONFIG.yellow};
         color: #162840;
-        font-family: Arial, sans-serif;
         font-weight: 900;
         font-size: 2.7em;
         line-height: 1.05;
@@ -440,7 +518,6 @@
       }
       .sg-header-werden {
         margin: 0 0 12px;
-        font-family: Arial, sans-serif;
         font-size: 1.5em;
         font-weight: 700;
         color: #fff;
@@ -497,7 +574,7 @@
     // Bottom: static heading + intro paragraphs from feed
     const introDiv = mk('div', { className: 'sg-header-intro' });
     if (introNodes && introNodes.length) {
-      introNodes.forEach(n => introDiv.appendChild(n.cloneNode(true)));
+      introNodes.forEach(n => introDiv.appendChild(cleanClone(n, false)));
     }
 
     const bottom = mk('div', { className: 'sg-header-bottom' }, [
@@ -510,7 +587,7 @@
 
     // Root — prefer the SF background image, fall back to the configured PNG.
     const heroImageUrl = findHeroImageUrl() || CONFIG.heroImageUrl;
-    const root = mk('div', { id: 'sg-header-root', className: 'sg-header-root' }, [
+    const root = mk('div', { id: 'sg-header-root', className: 'sg-header-root sg-root' }, [
       mk('img', { className: 'sg-header-bg', src: heroImageUrl, alt: '' }),
       content,
     ]);
@@ -536,46 +613,27 @@
     if (!sections) return;
 
     injectStyle('sg-body-style', `
-      .sg-body-root        { font-family: Arial, sans-serif; font-size: 16px; line-height: 1.6; color: #22323f; margin: 0 0 32px; }
+      .sg-body-root        { margin: 0 0 32px; }
       .sg-lead             { margin: 0 0 8px; }
       .sg-lead p           { margin: 0 0 12px; line-height: 1.6; }
       .sg-lead strong      { color: ${CONFIG.blue}; }
       .sg-two-col          { display: flex; gap: 40px; width: 100%; box-sizing: border-box; margin: 32px 0; }
       .sg-col              { flex: 1 1 0; min-width: 0; }
-      /* One shared heading style for all body section headings */
-      .sg-col-heading,
-      .sg-rest h2,.sg-rest h3,.sg-rest h4 { font-size: 1.15em; font-weight: 700; color: ${CONFIG.blue}; text-transform: uppercase; margin: 0 0 14px; padding-bottom: 8px; border-bottom: 3px solid ${CONFIG.yellow}; }
       .sg-col ul,.sg-rest ul { margin: 10px 0 0; padding-left: 22px !important; list-style-position: outside !important; list-style-type: disc; }
       .sg-col li,.sg-rest li { margin-bottom: 6px; line-height: 1.6; padding-left: 4px; text-align: left; }
       .sg-col li p,.sg-rest li p { margin: 0; } /* some feeds wrap li text in <p> */
-      .sg-col h2:not(.sg-col-heading),.sg-col h3,.sg-col h4 { display: none; }
+      /* Headings nested inside cloned column content duplicate our own → hide */
+      .sg-col :is(h1,h2,h3,h4,h5,h6):not(.sg-col-heading) { display: none; }
       .sg-rest             { margin: 24px 0; }
       .sg-rest p,.sg-col p { margin: 12px 0 0; line-height: 1.6; }
       /* Only the diversity / equal-opportunity statement gets the callout box */
       .sg-rest p.sg-note,.sg-col p.sg-note { margin-top: 18px; background: #f1f5f8; border-left: 4px solid ${CONFIG.yellow}; padding: 16px 20px; border-radius: 6px; }
-      .sg-cta-box          { display:flex; align-items:flex-end; justify-content:space-between; gap:32px; background: ${CONFIG.yellow}; padding: 28px 32px; border-radius: 6px; margin: 32px 0; box-sizing: border-box; }
-      .sg-cta-content      { flex:1 1 auto; min-width:0; }
-      .sg-cta-box,.sg-cta-box * { color: ${CONFIG.blue} !important; -webkit-text-fill-color: ${CONFIG.blue} !important; }
-      .sg-cta-heading      { margin: 0 0 12px; font-size: 1.3em; font-weight: 800; line-height: 1.2; }
-      .sg-cta-box p        { margin: 0 0 8px; line-height: 1.6; }
-      /* SF apply button as a "speech bubble" — same shape as the header BE bubble.
-         Desktop: bottom-right, level with the last text line. Mobile: see media query. */
-      .sg-cta-apply        { flex:0 0 auto; margin:0; }
-      .sg-cta-apply a,.sg-cta-apply button,.sg-cta-apply input { position:relative; display:inline-block; background:${CONFIG.blue} !important; color:#fff !important; -webkit-text-fill-color:#fff !important; border:0 !important; padding:18px 48px !important; border-radius:18px 0 18px 0 !important; font-weight:800 !important; font-size:1.2em !important; letter-spacing:.4px; text-transform:uppercase; text-decoration:none !important; cursor:pointer; box-shadow:0 6px 16px rgba(0,30,60,0.22); transition:transform .12s ease, box-shadow .12s ease; }
-      .sg-cta-apply a::after,.sg-cta-apply button::after { content:''; position:absolute; bottom:-15px; left:0; width:0; height:0; border-top:15px solid ${CONFIG.blue}; border-right:22px solid transparent; }
-      .sg-cta-apply a:hover,.sg-cta-apply button:hover { transform:translateY(-1px); box-shadow:0 9px 22px rgba(0,30,60,0.28); }
-      .sg-cta-box a        { color: ${CONFIG.blue} !important; text-decoration: underline; }
-      .sg-cta-box img      { border-radius: 50%; width: 80px !important; height: 80px !important; object-fit: cover; display: block; margin: 8px 0; }
-      .sg-cta-box strong   { font-size: 1.05em; }
       @media (max-width: ${CONFIG.mobileBreakpoint}px) {
         .sg-two-col  { flex-direction: column; gap: 24px; }
-        .sg-cta-box  { flex-direction:column; align-items:stretch; padding: 20px 18px; }
-        .sg-cta-apply { display:flex; justify-content:center; margin:20px 0 0; }
-        .sg-cta-apply a,.sg-cta-apply button,.sg-cta-apply input { width:100%; text-align:center; padding:16px 24px !important; }
       }
     `);
 
-    const root = mk('div', { className: 'sg-body-root', id: 'sg-body-root' });
+    const root = mk('div', { className: 'sg-body-root sg-root', id: 'sg-body-root' });
 
     // Lead (role intro): everything between the company boilerplate (header) and
     // the first heading. Shared by both layouts.
@@ -597,11 +655,11 @@
       // both real <h1-6> and short <p> pseudo-headings (via headingOf).
       const bodyOnly = nodes => nodes.filter(el => !headingOf(el));
       const leftCol = mk('div', { className: 'sg-col' }, [
-        mk('h2', { className: 'sg-col-heading', textContent: 'Ihre Aufgaben' }),
+        sgHeading('Ihre Aufgaben', 'sg-col-heading'),
       ]);
       appendClones(leftCol, bodyOnly(sections.aufgaben));
       const rightCol = mk('div', { className: 'sg-col' }, [
-        mk('h2', { className: 'sg-col-heading', textContent: 'Ihr Profil' }),
+        sgHeading('Ihr Profil', 'sg-col-heading'),
       ]);
       appendClones(rightCol, bodyOnly(sections.profil));
       root.appendChild(mk('div', { className: 'sg-two-col' }, [leftCol, rightCol]));
@@ -609,7 +667,11 @@
       // Extra sections ("Wir bieten" etc.)
       if (sections.rest.length) {
         const restDiv = mk('div', { className: 'sg-rest' });
-        appendClones(restDiv, sections.rest);
+        sections.rest.forEach(el => {
+          if (isBlank(el)) return;
+          const h = headingOf(el);
+          restDiv.appendChild(h ? sgHeading(h.replace(/[:\s]+$/, '')) : cleanClone(el));
+        });
         markDiversity(restDiv);
         if (restDiv.children.length) root.appendChild(restDiv);
       }
@@ -631,8 +693,8 @@
         group.forEach(chunk => chunk.forEach(node => {
           const h = headingOf(node);
           col.appendChild(h
-            ? mk('h2', { className: 'sg-col-heading', textContent: h.replace(/[:\s]+$/, '') })
-            : node.cloneNode(true));
+            ? sgHeading(h.replace(/[:\s]+$/, ''), 'sg-col-heading')
+            : cleanClone(node));
         }));
         markDiversity(col);
         return col;
@@ -654,31 +716,145 @@
 
   // ── CTA + contact (yellow box) — rendered last so it sits below Benefits ─────
 
-  function buildCta(sections) {
+  function buildCta(sections, businessUnit) {
     if (document.getElementById('sg-cta-root')) return;
-    const ctaNodes = sections ? [...sections.cta, ...sections.contact] : [];
+    const ctaSection = sections ? sections.cta : [];
+    const contactSection = sections ? sections.contact : [];
     // SF's native apply button (usually at the very bottom) — pull it into the box.
     const applyBtns = document.querySelectorAll('.applylink, .unify-apply-button');
     const applyBtn = applyBtns[applyBtns.length - 1] || null;
-    if (!ctaNodes.length && !applyBtn) return;
+    if (!ctaSection.length && !contactSection.length && !applyBtn) return;
 
-    const box = mk('div', { className: 'sg-cta-box', id: 'sg-cta-root' });
-    const content = mk('div', { className: 'sg-cta-content' });
-    ctaNodes.forEach(el => {
+    injectStyle('sg-cta-style', `
+      /* Two stacked rows: 1) heading + lead text, 2) a two-zone footer — the
+         contact block on the left, a logo-over-apply-button action stack on
+         the right, split by a single divider so nothing floats unanchored on
+         the flat yellow field. */
+      .sg-cta-box          { display:flex; flex-direction:column; background: ${CONFIG.yellow}; padding: 32px; border-radius: 6px; margin: 32px 0; box-sizing: border-box; }
+      .sg-cta-box,.sg-cta-box * { color: ${CONFIG.blue} !important; -webkit-text-fill-color: ${CONFIG.blue} !important; }
+      /* Shared .sg-heading style — only the rule turns blue, since a yellow
+         rule would vanish on the yellow box. */
+      body #sg-cta-root .sg-heading { border-bottom-color: ${CONFIG.blue} !important; }
+      .sg-cta-content      { min-width:0; }
+      .sg-cta-box p        { margin: 0 0 8px; line-height: 1.6; }
+      /* Footer row: contact zone (flexible) + action zone (fixed), divided by
+         a single rule instead of three equal-width columns with dead space
+         between them. */
+      .sg-cta-bottom       { display:flex; align-items:stretch; gap:40px; margin-top:28px; padding-top:26px; border-top:1px solid rgba(20,42,70,0.18); }
+      /* Contact zone: a small uppercase label on its own line, then the photo
+         and the name/detail stack side by side underneath it. */
+      .sg-cta-contact      { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; align-items:flex-start; text-align:left; }
+      .sg-cta-contact-label { font-size:.8em; font-weight:700; letter-spacing:.4px; text-transform:uppercase; margin:0 0 14px !important; }
+      .sg-cta-contact-row  { display:flex; align-items:flex-start; gap:18px; width:100%; }
+      .sg-cta-contact-text { display:flex; flex-direction:column; min-width:0; }
+      .sg-cta-contact-text p { margin: 0 0 3px; line-height: 1.5; }
+      .sg-cta-contact-text p:empty { display:none; }
+      .sg-cta-box a        { color: ${CONFIG.blue} !important; text-decoration: underline; }
+      .sg-cta-box img:not(.sg-cta-logo) { border-radius: 50%; width: 80px !important; height: 80px !important; object-fit: cover; display: block; margin: 0; flex-shrink: 0; }
+      .sg-cta-box strong   { font-size: 1.05em; }
+      /* Action zone: logo on top, apply button below, right-aligned, set off
+         from the contact zone by a vertical rule. */
+      .sg-cta-action       { flex:0 0 auto; display:flex; flex-direction:column; align-items:flex-end; justify-content:space-between; gap:20px; padding-left:40px; border-left:1px solid rgba(20,42,70,0.18); }
+      /* Company logo — white card echoing the same geometric shape (top-left +
+         bottom-right rounded corners) used by the header speech bubble/button. */
+      .sg-cta-logo         { width:130px; height:auto; object-fit:contain; background:#fff; border-radius:14px 0 14px 0; padding:18px 24px; box-sizing:border-box; box-shadow:0 6px 16px rgba(0,30,60,0.18); }
+      /* SF apply button as a "speech bubble" — same shape as the header BE bubble. */
+      .sg-cta-apply-col a,.sg-cta-apply-col button,.sg-cta-apply-col input { position:relative; display:inline-block; background:${CONFIG.blue} !important; color:#fff !important; -webkit-text-fill-color:#fff !important; border:0 !important; padding:18px 48px !important; border-radius:18px 0 18px 0 !important; font-weight:800 !important; font-size:1.2em !important; letter-spacing:.4px; text-transform:uppercase; text-decoration:none !important; cursor:pointer; box-shadow:0 6px 16px rgba(0,30,60,0.22); transition:transform .12s ease, box-shadow .12s ease; }
+      .sg-cta-apply-col a::after,.sg-cta-apply-col button::after { content:''; position:absolute; bottom:-15px; left:0; width:0; height:0; border-top:15px solid ${CONFIG.blue}; border-right:22px solid transparent; }
+      .sg-cta-apply-col a:hover,.sg-cta-apply-col button:hover { transform:translateY(-1px); box-shadow:0 9px 22px rgba(0,30,60,0.28); }
+      @media (max-width: ${CONFIG.mobileBreakpoint}px) {
+        .sg-cta-box  { padding: 20px 18px; }
+        .sg-cta-bottom { flex-direction:column; gap:24px; margin-top:20px; padding-top:20px; }
+        .sg-cta-contact { align-items:center; text-align:center; }
+        .sg-cta-contact-label { text-align:center !important; }
+        .sg-cta-contact-row { justify-content:center; }
+        .sg-cta-contact-text, .sg-cta-contact-text * { text-align:left !important; }
+        .sg-cta-action { flex-direction:column; align-items:center; border-left:0; padding-left:0; padding-top:24px; border-top:1px solid rgba(20,42,70,0.18); width:100%; }
+        .sg-cta-apply-col a,.sg-cta-apply-col button,.sg-cta-apply-col input { width:100%; text-align:center; padding:16px 24px !important; }
+        .sg-cta-logo { width:110px; padding:16px 20px; }
+      }
+    `);
+
+    const box = mk('div', { className: 'sg-cta-box sg-root', id: 'sg-cta-root' });
+
+    // Row 1 + 2: pull the standalone "Haben wir Ihr Interesse geweckt?" line out
+    // as a real heading (SEO); the rest of the cta section is the lead text.
+    let headingEl = null;
+    const leadNodes = [];
+    ctaSection.forEach(el => {
       if (isBlank(el)) return;
       const text = el.textContent.trim();
-      // Render the standalone "Haben wir Ihr Interesse geweckt?" line as a real
-      // heading (SEO) instead of a paragraph.
-      if (/^Haben wir Ihr Interesse geweckt\s*\??\s*$/i.test(text)) {
-        content.appendChild(mk('h2', { className: 'sg-cta-heading', textContent: text }));
+      if (!headingEl && /^Haben wir Ihr Interesse geweckt\s*\??\s*$/i.test(text)) {
+        headingEl = sgHeading(text, 'sg-cta-heading');
       } else {
-        content.appendChild(el.cloneNode(true));
+        leadNodes.push(el);
       }
     });
-    if (content.children.length) box.appendChild(content);
 
-    // Move (not clone) the real apply button so its SF apply behaviour stays intact.
-    if (applyBtn) box.appendChild(mk('div', { className: 'sg-cta-apply' }, [applyBtn]));
+    if (headingEl) box.appendChild(headingEl);
+
+    if (leadNodes.length) {
+      const content = mk('div', { className: 'sg-cta-content' });
+      leadNodes.forEach(el => content.appendChild(cleanClone(el)));
+      box.appendChild(content);
+    }
+
+    // Footer row: contact zone + action zone (logo above apply button),
+    // split by a single divider instead of three equal free-floating columns.
+    if (contactSection.length || applyBtn) {
+      const bottomRow = mk('div', { className: 'sg-cta-bottom' });
+
+      const contactCol = mk('div', { className: 'sg-cta-contact' });
+      const contactRow = mk('div', { className: 'sg-cta-contact-row' });
+      const contactText = mk('div', { className: 'sg-cta-contact-text' });
+      let labelDone = false;
+      contactSection.forEach(el => {
+        if (isBlank(el)) return;
+        const clone = cleanClone(el);
+        // Style the "Ihr Ansprechpartner" line as a small label instead of a
+        // plain paragraph, for a cleaner, more legible column.
+        if (!labelDone && /Ansprechpartner/i.test(clone.textContent)) {
+          clone.classList.add('sg-cta-contact-label');
+          labelDone = true;
+          contactCol.appendChild(clone);
+          return;
+        }
+        // The CMS content puts the photo and every text line (name, role,
+        // phone, email) inside one single <p>, separated only by <br> — pull
+        // the <img> out of that block so it can sit beside the text instead
+        // of stacked above it inside the same paragraph.
+        const img = clone.tagName === 'IMG' ? clone : clone.querySelector('img');
+        if (img) {
+          // A wrapper around the photo (e.g. a link) is dropped only if the
+          // photo was all it held — otherwise it also carries name/phone/email.
+          const parent = img.parentElement;
+          const emptyWrapper = parent && parent !== clone && !parent.textContent.trim() ? parent : null;
+          const next = (emptyWrapper || img).nextSibling;
+          contactRow.appendChild(img);
+          if (emptyWrapper) emptyWrapper.remove();
+          if (next && next.nodeName === 'BR') next.remove();
+          if (clone !== img && clone.textContent.trim()) contactText.appendChild(clone);
+        } else {
+          contactText.appendChild(clone);
+        }
+      });
+      if (contactText.children.length) contactRow.appendChild(contactText);
+      if (contactRow.children.length) contactCol.appendChild(contactRow);
+      bottomRow.appendChild(contactCol);
+
+      const actionCol = mk('div', { className: 'sg-cta-action' });
+      const logo = resolveCompanyLogo(businessUnit);
+      actionCol.appendChild(mk('img', { className: 'sg-cta-logo', src: logo.src, alt: logo.alt, loading: 'lazy' }));
+      // Move (not clone) the real apply button so its SF apply behaviour stays intact.
+      if (applyBtn) {
+        const applyWrap = mk('div', { className: 'sg-cta-apply-col' });
+        applyWrap.appendChild(applyBtn);
+        actionCol.appendChild(applyWrap);
+      }
+      bottomRow.appendChild(actionCol);
+
+      box.appendChild(bottomRow);
+    }
 
     if (box.children.length) insertBeforeScript(box);
   }
@@ -712,63 +888,73 @@
 
   // ── 3. Benefits ────────────────────────────────────────────────────────────
 
-  const BENEFIT_IMAGES = {
-    'Mitarbeiter­rabatte':                        'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/Mitarbeiterrabatte.png',
-    'Mitarbeiterrabatte':                              'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/Mitarbeiterrabatte.png',
-    'Gesundheits­vorsorge':                       'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/Gesundheitsvorsorge.png',
-    'Gesundheitsvorsorge':                             'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/Gesundheitsvorsorge.png',
-    'Modern ausgestattete Arbeitsplätze':         'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/ModArbeitsplaetze.png',
-    'Betriebliche Altersvorsorge':                     'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/BetrAltersvorsorge.png',
-    '30 Tage Urlaub':                                  'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/Urlaub.png',
-    '29 Tage Urlaub':                                  'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/Urlaub.png',
-    'Individuelle Weiterbildung':                      'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/Weiterbildungsangebote.png',
-    'Spannende Aufgaben, zukunftssicherer Arbeitsplatz': 'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/Studium-angepasst-Arbeitszeiten.png',
-    'Jobrad':                                          'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/Jobrad-Leasing.png',
-    'kostenlose Parkplätze':                      'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/Parkplatz.png',
-    'Barriere­freiheit':                          'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/Barrierefrei.png',
-    'Barrierefreiheit':                                'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/Barrierefrei.png',
-    'Coaching /Mentoring':                             'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/Coaching.png',
-    'Familien­freundlichkeit':                    'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/Familienfreundlich.png',
-    'Familienfreundlichkeit':                          'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/Familienfreundlich.png',
-    'Firmen­eigene Kantine':                      'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/Kantine.png',
-    'Firmen-eigene Kantine':                           'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/Kantine.png',
-    'Firmenwagen':                                     'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/Firmenwagen.png',
-    'Fitnessraum für Mitarbeiter/­innen':    'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/Fitnessraum.png',
-    'Fitnessraum für Mitarbeiter/-innen':         'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/Fitnessraum.png',
-    'Flexible Arbeitszeit':                            'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/FlexArbeitszeit.png',
-    'Gute Verkehrsanbindung':                          'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/GuteVerkehrsanbindung.png',
-    'Mitarbeiter-­Events':                        'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/Mitarbeiterevents.png',
-    'Mitarbeiter-Events':                              'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/Mitarbeiterevents.png',
-    'Modernes IT-Equipment':                           'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/ITequipment.png',
-    'Attraktive Vergütung':                       'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/verguetung.png',
-    'Remote Work möglich':                        'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/Homeoffice.png',
+  // Benefit-ID (customfield4, Test-IDs 36–90) → label + icon file. Labels carry soft hyphens
+  // (­) for clean line breaks in the narrow tiles; no file → placeholder SVG.
+  const BENEFIT_IMG = 'https://www.stiegelmeyer.com/fileadmin/stiegelmeyer-gruppe/media/karriere/benefits/png/';
+  const BENEFITS = {
+    36: ['Mitarbeiter­rabatte', 'Mitarbeiterrabatte.png'],
+    37: ['Gesundheits­vorsorge', 'Gesundheitsvorsorge.png'],
+    38: ['Modern ausgestattete Arbeitsplätze', 'ModArbeitsplaetze.png'],
+    39: ['Betriebliche Altersvorsorge', 'BetrAltersvorsorge.png'],
+    40: ['Remote Work möglich', 'Homeoffice.png'],
+    41: ['30 Tage Urlaub', 'Urlaub.png'],
+    42: ['29 Tage Urlaub', 'Urlaub.png'],
+    56: ['Individuelle Weiterbildung', 'Weiterbildungsangebote.png'],
+    76: ['Spannende Aufgaben, zukunftssicherer Arbeitsplatz', 'Studium-angepasst-Arbeitszeiten.png'],
+    77: ['Jobrad', 'Jobrad-Leasing.png'],
+    78: ['kostenlose Parkplätze', 'Parkplatz.png'],
+    79: ['Barriere­freiheit', 'Barrierefrei.png'],
+    80: ['Coaching /Mentoring', 'Coaching.png'],
+    81: ['Familien­freundlichkeit', 'Familienfreundlich.png'],
+    82: ['Firmen­eigene Kantine', 'Kantine.png'],
+    83: ['Firmenwagen', 'Firmenwagen.png'],
+    84: ['Fitnessraum für Mitarbeiter/­innen', 'Fitnessraum.png'],
+    85: ['Flexible Arbeitszeit', 'FlexArbeitszeit.png'],
+    86: ['Gute Verkehrsanbindung', 'GuteVerkehrsanbindung.png'],
+    87: ['Mitgestaltungsmöglichkeiten', null],
+    88: ['Attraktive Vergütung', 'verguetung.png'],
+    89: ['Modernes IT-Equipment', 'ITequipment.png'],
+    90: ['Mitarbeiter-­Events', 'Mitarbeiterevents.png'],
   };
 
-  const BENEFIT_BY_ID = {
-    36: 'Mitarbeiter­rabatte',     37: 'Gesundheits­vorsorge',
-    38: 'Modern ausgestattete Arbeitsplätze', 39: 'Betriebliche Altersvorsorge',
-    40: 'Remote Work möglich',     41: '30 Tage Urlaub',
-    42: '29 Tage Urlaub',               56: 'Individuelle Weiterbildung',
-    76: 'Spannende Aufgaben, zukunftssicherer Arbeitsplatz',
-    77: 'Jobrad',                        78: 'kostenlose Parkplätze',
-    79: 'Barriere­freiheit',        80: 'Coaching /Mentoring',
-    81: 'Familien­freundlichkeit',  82: 'Firmen­eigene Kantine',
-    83: 'Firmenwagen',                   84: 'Fitnessraum für Mitarbeiter/­innen',
-    85: 'Flexible Arbeitszeit',          86: 'Gute Verkehrsanbindung',
-    87: 'Mitgestaltungsmöglichkeiten',
-    88: 'Attraktive Vergütung',     89: 'Modernes IT-Equipment',
-    90: 'Mitarbeiter-­Events',
+  // The Live SF system still uses the older option IDs 8–30 (Test uses 36–90),
+  // so map those onto the same entries. Same benefit → same object, so the
+  // duplicate check below also catches an old and a new ID for one benefit.
+  const LEGACY_BENEFIT_IDS = {
+    8: 38, 9: 81, 10: 89, 11: 83, 12: 39, 13: 37, 14: 90, 15: 36, 16: 88, 17: 87, 18: 56,
+    19: 82, 20: 41, 21: 86, 22: 84, 23: 79, 24: 77, 25: 42, 26: 40, 27: 80, 28: 76, 29: 85, 30: 78,
   };
+  for (const [oldId, newId] of Object.entries(LEGACY_BENEFIT_IDS)) BENEFITS[oldId] = BENEFITS[newId];
+
+  // Some feeds carry benefit names instead of IDs. Match those ignoring soft
+  // hyphens, hyphens, whitespace and case ("Mitarbeiter-Events" = ID 90).
+  const benefitKey = t => t.replace(/[­-]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const BENEFITS_BY_NAME = Object.fromEntries(Object.values(BENEFITS).map(b => [benefitKey(b[0]), b]));
+
+  function benefitPlaceholderIcon() {
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('width', '44'); svg.setAttribute('height', '44'); svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.classList.add('sg-benefits-icon');
+    const circle = document.createElementNS(NS, 'circle');
+    circle.setAttribute('cx', '12'); circle.setAttribute('cy', '12'); circle.setAttribute('r', '11'); circle.setAttribute('fill', '#eef3f7');
+    const path = document.createElementNS(NS, 'path');
+    path.setAttribute('d', 'M3 17.25V21h3.75l11-11-3.75-3.75-11 11zm14.85-9.6c.3-.3.3-.75 0-1.05l-2.45-2.45c-.3-.3-.75-.3-1.05 0l-1.6 1.6 3.75 3.75 1.35-1.85z');
+    path.setAttribute('fill', CONFIG.blue);
+    svg.append(circle, path);
+    return svg;
+  }
 
   function buildBenefits(jobNode) {
     if (document.getElementById('sg-benefits-root')) return;
 
     const raw = jobNode ? nodeText(jobNode, 'customfield4') : '';
-    const tokens = raw ? raw.split(';').map(s => s.trim()).filter(Boolean) : [];
+    const tokens = raw.split(';').map(s => s.trim()).filter(Boolean);
 
     injectStyle('sg-benefits-style', `
-      .sg-benefits-wrapper { width:100%; display:flex; flex-direction:column; align-items:center; margin:40px 0 24px; font-family:Arial,sans-serif; font-size:16px; }
-      .sg-benefits-heading { width:100%; font-size:1.15em; font-weight:700; color:${CONFIG.blue}; text-transform:uppercase; margin:0 0 14px; padding-bottom:8px; border-bottom:3px solid ${CONFIG.yellow}; }
+      .sg-benefits-wrapper { width:100%; display:flex; flex-direction:column; align-items:center; margin:40px 0 24px; }
+      .sg-benefits-heading { width:100%; }
       .sg-benefits-inner   { display:flex; flex-wrap:wrap; justify-content:center; gap:30px 20px; padding:32px 40px; background:#fff; border-radius:24px; max-width:1200px; width:100%; box-sizing:border-box; }
       .sg-benefits-item    { flex:0 0 120px; max-width:120px; display:flex; flex-direction:column; align-items:center; text-align:center; }
       .sg-benefits-icon    { width:90px;height:90px;margin-bottom:14px;object-fit:contain; }
@@ -777,71 +963,38 @@
       @media (max-width:760px)  { .sg-benefits-inner{gap:24px 18px;padding:22px 24px;border-radius:20px} .sg-benefits-item{flex-basis:128px;max-width:128px} }
       @media (max-width:520px)  { .sg-benefits-inner{gap:20px 14px;padding:18px} .sg-benefits-item{flex-basis:118px;max-width:118px} .sg-benefits-icon{width:80px;height:80px} }
       @media (max-width:380px)  { .sg-benefits-inner{padding:14px 12px} .sg-benefits-item{flex-basis:104px;max-width:104px} }
-      @media (prefers-reduced-motion:reduce) { .sg-benefits-item{animation:none} }
     `);
 
     const inner = mk('div', { className: 'sg-benefits-inner' });
-    const outer = mk('div', { className: 'sg-benefits-wrapper', id: 'sg-benefits-root' }, [
-      mk('h2', { className: 'sg-benefits-heading', textContent: 'Unsere Benefits' }),
-      inner,
-    ]);
-
-    if (tokens.length) {
-      const seen = new Set();
-      tokens.forEach(token => {
-        const num = Number(token);
-        let text;
-
-        if (!Number.isNaN(num) && BENEFIT_BY_ID[num]) {
-          if (seen.has(num)) return;
-          seen.add(num);
-          text = BENEFIT_BY_ID[num];
-        } else {
-          const t = token.trim();
-          const key = t.replace(/\s+/g, ' ').toLowerCase();
-          if (seen.has(key)) return;
-          seen.add(key);
-          text = t;
-        }
-
-        const imgSrc = BENEFIT_IMAGES[text] ?? BENEFIT_IMAGES[text.replace(/­/g, '')] ?? null;
-        const isMitgestaltung = text.toLowerCase().includes('mitgestaltung');
-        // No icon and no inline-SVG fallback → nothing meaningful to show.
-        if (!imgSrc && !isMitgestaltung) return;
-
-        const item = mk('div', { className: 'sg-benefits-item' });
-
-        if (!imgSrc && isMitgestaltung) {
-          const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-          svg.setAttribute('width', '44'); svg.setAttribute('height', '44'); svg.setAttribute('viewBox', '0 0 24 24');
-          svg.classList.add('sg-benefits-icon');
-          const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-          circle.setAttribute('cx', '12'); circle.setAttribute('cy', '12'); circle.setAttribute('r', '11'); circle.setAttribute('fill', '#eef3f7');
-          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-          path.setAttribute('d', 'M3 17.25V21h3.75l11-11-3.75-3.75-11 11zm14.85-9.6c.3-.3.3-.75 0-1.05l-2.45-2.45c-.3-.3-.75-.3-1.05 0l-1.6 1.6 3.75 3.75 1.35-1.85z');
-          path.setAttribute('fill', CONFIG.blue);
-          svg.append(circle, path);
-          item.appendChild(svg);
-        } else if (imgSrc) {
-          item.appendChild(mk('img', { className: 'sg-benefits-icon', src: imgSrc, alt: text, loading: 'lazy' }));
-        }
-
-        item.appendChild(mk('div', { className: 'sg-benefits-label', textContent: text }));
-        inner.appendChild(item);
-      });
-    }
+    const seen = new Set();
+    tokens.forEach(token => {
+      const benefit = /^\d+$/.test(token) ? BENEFITS[Number(token)] : BENEFITS_BY_NAME[benefitKey(token)];
+      if (!benefit || seen.has(benefit)) return; // unknown ID/name or duplicate
+      seen.add(benefit);
+      const [label, file] = benefit;
+      inner.appendChild(mk('div', { className: 'sg-benefits-item' }, [
+        // Decorative icon (alt="") — the label below already names the benefit.
+        file ? mk('img', { className: 'sg-benefits-icon', src: BENEFIT_IMG + file, alt: '', loading: 'lazy' })
+             : benefitPlaceholderIcon(),
+        mk('div', { className: 'sg-benefits-label', textContent: label }),
+      ]));
+    });
 
     // Don't render a bare "Unsere Benefits" heading over an empty box.
     if (!inner.children.length) return;
 
-    insertBeforeScript(outer);
+    insertBeforeScript(mk('div', { className: 'sg-benefits-wrapper sg-root', id: 'sg-benefits-root' }, [
+      sgHeading('Unsere Benefits', 'sg-benefits-heading'),
+      inner,
+    ]));
   }
 
   // ── Init ───────────────────────────────────────────────────────────────────
 
   async function init() {
+    injectBaseStyle();
     const jobId = getJobId();
-    const xml = await getFeed().catch(() => null);
+    const xml = await loadFeed(getFeedUrl()).catch(() => null);
     const jobNode = findJobNode(xml, jobId);
 
     // Prefer the SF layout tokens (Kopfzeile / Stellenbeschreibung / Fußzeile)
@@ -853,7 +1006,7 @@
     buildHeader(jobNode, sections?.intro ?? []);
     buildJobBody(jobNode, sections);
     buildBenefits(jobNode);
-    buildCta(sections); // last → sits below the Benefits section
+    buildCta(sections, nodeText(jobNode, 'businessunit')); // last → sits below the Benefits section
 
     // Hide the SF-native description so it isn't shown twice.
     if (tokens) {

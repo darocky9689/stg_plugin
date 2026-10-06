@@ -12,14 +12,15 @@ The client runs **two SAP SuccessFactors systems**: **Test** (development) and *
 
 | Path | Purpose |
 |---|---|
-| `src/plugin/header.js` | Hero header with job title overlay + speech bubble, job body (Aufgaben/Profil), and CTA/contact box |
+| `src/plugin/header.js` | Hero header with job title overlay + speech bubble, job body (Aufgaben/Profil), CTA/contact box, and the benefits grid (reading benefit IDs from the XML feed's `customfield4` field) |
 | `src/plugin/jobinfo.js` | Tile row: company, location, workload, entry date |
-| `src/plugin/benefits.js` | Responsive benefits grid, reading benefit IDs from the XML feed's `customfield4` field |
 | `src/seo.js` | Generates a JSON-LD `JobPosting` for Google for Jobs and neutralizes SF's incomplete microdata |
 
-`src/plugin/*.js` are bundled together (in that order) into a single `plugin.js` per environment; `src/seo.js` becomes a standalone `seo.js`. Each module is its own IIFE with an init guard (`window.__sgHeaderPluginInitialized`, `window.__jobInfoPluginInitialized`, `window.__jobBenefitsPluginInitialized`, `window.__jobPostingSeoPluginInitialized`) — no shared globals except the deliberate `window.__sgFeedCache`, a URL-keyed cache so the XML feed is fetched once per page load instead of once per module.
+`src/plugin/*.js` are bundled together (in that order) into a single `plugin.js` per environment; `src/seo.js` becomes a standalone `seo.js`. Each module is its own IIFE with an init guard (`window.__sgHeaderPluginInitialized`, `window.__jobInfoPluginInitialized`, `window.__jobPostingSeoPluginInitialized`) — no shared globals except the deliberate `window.__sgFeedCache`, a URL-keyed cache so the XML feed is fetched once per page load instead of once per module (`seo.js` uses it too). All modules match jobs on the numeric part of the req ID (`603-de_DE` ↔ `603`).
 
-Feed URLs are **not** hardcoded in `src/` — they're placeholder tokens (`__FEED_URL__`, `__FEED_BASE_URL__`, `__DEFAULT_FEED_ID__`) filled in at build time from `config/<env>.json`.
+`z_old/retired-benefits-module.js` was a separate, older benefits renderer (once `src/plugin/benefits.js`) with its own, outdated benefit-ID mapping. It duplicated `header.js`'s benefits section but — unlike it — showed a visible "Keine Benefits für diesen Job hinterlegt." fallback whenever its stale ID table didn't match the feed. It's no longer part of the build; kept only for reference.
+
+Feed URLs are **not** hardcoded in `src/` — they're placeholder tokens (`__FEED_BASE_URL__`, `__DEFAULT_FEED_ID__`) filled in at build time from `config/<env>.json`. At runtime every module builds the feed URL the same way: `__FEED_BASE_URL__` + the page's `?feedId=` query param (if numeric), else `__DEFAULT_FEED_ID__`.
 
 ## Environments
 
@@ -41,7 +42,7 @@ branches:
 
 ## Data source
 
-Jobs are matched by URL — the job req ID is extracted from the trailing path segment (`/123456-de_DE`). The feed contains `<job>` nodes with fields: `ID`, `title`, `businessunit`, `location`, `shifttype`, `customfield4` (benefit IDs), `customfield5` (entry date), among others used by `src/seo.js`.
+Jobs are matched by URL — the job req ID is extracted from the trailing path segment (`/123456-de_DE`). The feed contains `<job>` nodes with fields: `ID`, `title`, `businessunit`, `location`, `shifttype`, `customfield4` (benefit IDs — **Live uses the old option IDs 8–30, Test uses 36–90**; `header.js` maps both onto the same benefits), `customfield5` (entry date), among others used by `src/seo.js`.
 
 ## Company / brand logic
 

@@ -352,19 +352,27 @@
   }
 
   // ---- Feed laden (mit Timeout) --------------------------------------------
-  async function fetchFeed(url) {
-    var controller = new AbortController();
-    var timeoutId = window.setTimeout(function () { controller.abort(); }, FEED_TIMEOUT_MS);
-    try {
-      var res = await fetch(url, { signal: controller.signal });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      var xmlText = await res.text();
-      var xmlDoc = new DOMParser().parseFromString(xmlText, 'application/xml');
-      if (xmlDoc.querySelector('parsererror')) throw new Error('XML parse error');
-      return xmlDoc;
-    } finally {
-      window.clearTimeout(timeoutId);
+  // Teilt sich window.__sgFeedCache mit plugin.js (gleiche Seite, gleiche
+  // Feed-URL) -> der Feed wird pro Seitenaufruf nur einmal geladen.
+  function fetchFeed(url) {
+    var cache = (window.__sgFeedCache = window.__sgFeedCache || {});
+    if (!cache[url]) {
+      cache[url] = (async function () {
+        var controller = new AbortController();
+        var timeoutId = window.setTimeout(function () { controller.abort(); }, FEED_TIMEOUT_MS);
+        try {
+          var res = await fetch(url, { signal: controller.signal });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          var doc = new DOMParser().parseFromString(await res.text(), 'application/xml');
+          if (doc.querySelector('parsererror')) throw new Error('Feed-Antwort ist kein gültiges XML.');
+          return doc;
+        } finally {
+          window.clearTimeout(timeoutId);
+        }
+      })();
+      cache[url]['catch'](function () { delete cache[url]; });
     }
+    return cache[url];
   }
 
   function findJobNode(xmlDoc, jobReqId) {
