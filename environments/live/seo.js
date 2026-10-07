@@ -219,20 +219,35 @@
     return r.trim();
   }
 
+  // Mehrere Orte stehen getrennt (; | , Zeilenumbruch) in <multilocation>.
+  // Reine Laendercodes ("DE" aus "Herford, DE") werden verworfen.
+  function parseLocations(job) {
+    var raw = text(job, 'multilocation') || text(job, 'location') || text(job, 'city');
+    var seen = {};
+    return raw.split(/[;|,\r\n]+/).map(function (s) { return s.trim(); }).filter(function (s) {
+      if (!s || /^[A-Z]{2}$/.test(s)) return false;
+      var key = normalizeLoose(s);
+      if (seen[key]) return false;
+      seen[key] = true;
+      return true;
+    });
+  }
+
   // Baut die orts-bezogenen Felder. Drei Faelle:
   // 1) Aussendienst MIT Region (customfield2): physische jobLocation mit
   //    addressRegion (nur addressCountry ist bei Google Pflicht) -> zeigt die
   //    Region, garantiert valide, kein fragiles applicantLocationRequirements.
   // 2) Aussendienst OHNE Region (nur Platzhalter-Stadt wie "Homeoffice"):
   //    ortsungebunden -> jobLocationType TELECOMMUTE + Country (Googles Beispiel).
-  // 3) Normale Stelle: echte jobLocation mit addressLocality.
+  // 3) Normale Stelle: echte jobLocation mit addressLocality; bei mehreren
+  //    Orten ein Array mit je einer Place.
   function buildLocationFields(job) {
-    var city = text(job, 'city');
     var state = text(job, 'state');
     var postalcode = text(job, 'postalcode');
     var country = text(job, 'country') || 'DE';
     var countryName = COUNTRY_NAMES[country.toUpperCase()] || country;
     var region = cleanRegion(text(job, 'customfield2'));
+    var cities = parseLocations(job).filter(function (c) { return !isPlaceholderLocation(c); });
 
     // Fall 1: Region vorhanden -> physische Region-Location
     if (region) {
@@ -248,34 +263,35 @@
       };
     }
 
-    // Fall 2: Platzhalter-Stadt ohne Region -> ortsungebunden (TELECOMMUTE)
-    if (isPlaceholderLocation(city) || !city) {
+    // Fall 2: nur Platzhalter bzw. kein Ort -> ortsungebunden (TELECOMMUTE)
+    if (!cities.length) {
       return {
         jobLocationType: 'TELECOMMUTE',
         applicantLocationRequirements: { '@type': 'Country', name: countryName }
       };
     }
 
-    // Fall 3: normale Stelle mit echtem Ort.
+    // Fall 3: normale Stelle mit echten Orten.
     // Der Feed liefert nur die Stadt – Strasse/PLZ/Bundesland kommen aus der
-    // Standort-Tabelle. Feed-Werte haben Vorrang, falls sie doch mal gefuellt sind.
-    var site = SITE_ADDRESSES[normalizeLoose(city)] || null;
-    var address = { '@type': 'PostalAddress', addressCountry: country };
+    // Standort-Tabelle. Feed-Werte (state/postalcode) gelten nur bei genau
+    // einem Ort und haben dann Vorrang.
+    var single = cities.length === 1;
+    var places = cities.map(function (city) {
+      var site = SITE_ADDRESSES[normalizeLoose(city)] || null;
+      var address = { '@type': 'PostalAddress', addressCountry: country };
 
-    if (site && site.streetAddress) address.streetAddress = site.streetAddress;
-    address.addressLocality = site ? site.addressLocality : city;
-    address.addressRegion = state || (site ? site.addressRegion : '');
-    address.postalCode = postalcode || (site ? site.postalCode : '');
+      if (site && site.streetAddress) address.streetAddress = site.streetAddress;
+      address.addressLocality = site ? site.addressLocality : city;
+      address.addressRegion = (single && state) || (site ? site.addressRegion : '');
+      address.postalCode = (single && postalcode) || (site ? site.postalCode : '');
 
-    if (!address.addressRegion) delete address.addressRegion;
-    if (!address.postalCode) delete address.postalCode;
+      if (!address.addressRegion) delete address.addressRegion;
+      if (!address.postalCode) delete address.postalCode;
 
-    return {
-      jobLocation: {
-        '@type': 'Place',
-        address: address
-      }
-    };
+      return { '@type': 'Place', address: address };
+    });
+
+    return { jobLocation: single ? places[0] : places };
   }
 
   // ---- JSON-LD bauen -------------------------------------------------------

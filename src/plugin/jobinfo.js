@@ -86,6 +86,20 @@
     return el && el.textContent ? el.textContent.trim() : '';
   }
 
+  // Mehrere Orte stehen getrennt (; | , Zeilenumbruch) in <multilocation>.
+  // Reine Laendercodes ("DE" aus "Herford, DE") werden verworfen.
+  function parseLocations(job) {
+    var raw = text(job, 'multilocation') || text(job, 'location') || text(job, 'city');
+    var seen = {};
+    return raw.split(/[;|,\r\n]+/).map(function (s) { return s.trim(); }).filter(function (s) {
+      if (!s || /^[A-Z]{2}$/.test(s)) return false;
+      var key = s.toLowerCase();
+      if (seen[key]) return false;
+      seen[key] = true;
+      return true;
+    });
+  }
+
   function injectJobInfoStyles() {
     if (document.getElementById(JOBINFO_STYLE_ID)) return;
     var style = document.createElement('style');
@@ -101,6 +115,7 @@
     .jobinfodesign-icon { width:44px; height:44px; margin-bottom:10px; object-fit:contain; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.15)); background:#395366; border-radius:50%; padding:8px; box-sizing:border-box; }
     .jobinfodesign-label { font-size:13px; letter-spacing:.4px; text-transform:uppercase; font-weight:600; color:#395366; margin-bottom:4px; }
     .jobinfodesign-value { font-size:16px; font-weight:500; line-height:1.35; color:#22323f; word-break:break-word; }
+    .jobinfodesign-city { white-space:nowrap; }
     .jobinfodesign-companylogo { width:90px; max-width:130px; height:auto; object-fit:contain; margin-top:6px; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.12)); }
     @media (max-width: 1100px) { .jobinfodesign-inner { gap:40px; padding:30px 40px; } }
     @media (max-width: 980px) { .jobinfodesign-inner { gap:32px; padding:28px 36px; } .jobinfodesign-item { min-width:130px; } .jobinfodesign-item:not(:last-child):after { right:-16px; } }
@@ -139,7 +154,7 @@
     if (!job) return null;
     return {
       businessUnit: text(job, 'businessunit'),
-      location: text(job, 'location'),
+      locations: parseLocations(job),
       shifttype: text(job, 'shifttype'),
       entryDate: text(job, 'customfield5'),
       contractType: resolveContractType(text(job, 'department'))
@@ -149,7 +164,7 @@
   // Gibt null zurück, wenn kein Wert vorhanden ist -> Kachel wird beim Aufbau
   // komplett übersprungen, statt einen Platzhalter ("-") anzuzeigen.
   function createItem(iconUrl, label, value, extraClass) {
-    if (!value || !value.trim()) return null;
+    if (Array.isArray(value) ? !value.length : (!value || !value.trim())) return null;
     var wrap = document.createElement('div');
     wrap.className = 'jobinfodesign-item ' + (extraClass || '');
     var icon = document.createElement('img');
@@ -158,7 +173,16 @@
     l.className = 'jobinfodesign-label'; l.textContent = label;
     var v = document.createElement('div');
     v.className = 'jobinfodesign-value';
-    v.textContent = value.trim();
+    if (Array.isArray(value)) {
+      value.forEach(function (entry) {
+        var line = document.createElement('div');
+        line.className = 'jobinfodesign-city';
+        line.textContent = entry;
+        v.appendChild(line);
+      });
+    } else {
+      v.textContent = value.trim();
+    }
     wrap.appendChild(icon); wrap.appendChild(l); wrap.appendChild(v);
     return wrap;
   }
@@ -198,7 +222,7 @@
     inner.appendChild(companyItem);
 
     [
-      createItem(ASSETS + 'Icons/Jobs/Icon-Location.svg', 'Standort', info.location),
+      createItem(ASSETS + 'Icons/Jobs/Icon-Location.svg', info.locations.length > 1 ? 'Standorte' : 'Standort', info.locations),
       createItem(ASSETS + 'Icons/Jobs/Icon-Workload.svg', 'Auslastung', info.shifttype),
       createItem(CONTRACT_ICON, 'Vertragsart', info.contractType),
       createItem(ASSETS + 'Icons/Jobs/Icon-EntryDate.svg', 'Einstiegsdatum', info.entryDate)
