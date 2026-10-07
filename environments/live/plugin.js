@@ -25,13 +25,12 @@
     assets: 'https://www.stiegelmeyer-group.com/_assets/b8240a57c4b6735fe1567cb15f63534c/',
   };
 
-  // Markenlogik analog zu jobinfo.js / seo.js — HowRyou hat keine eigene
-  // Grafik und fällt wie überall sonst auf das Stiegelmeyer-Logo zurück.
+  // Markenlogik analog zu jobinfo.js / seo.js.
   function resolveCompanyLogo(businessUnit) {
     const bu = (businessUnit || '').toLowerCase();
-    return bu.includes('burmeier')
-      ? { src: CONFIG.assets + 'Images/burmeier.svg', alt: 'Burmeier' }
-      : { src: CONFIG.assets + 'Images/stiegelmeyer-logo.svg', alt: 'Stiegelmeyer' };
+    if (bu.includes('howryou')) return { src: 'https://rmkcdn.successfactors.com/70ccb92e/61920400-cd1b-4fd3-9830-a.png', alt: 'HowRyou' };
+    if (bu.includes('burmeier')) return { src: CONFIG.assets + 'Images/burmeier.svg', alt: 'Burmeier' };
+    return { src: CONFIG.assets + 'Images/stiegelmeyer-logo.svg', alt: 'Stiegelmeyer' };
   }
 
   // ── Utilities ──────────────────────────────────────────────────────────────
@@ -1210,7 +1209,10 @@
 
     var companyLogo = document.createElement('img');
     var bu = (info.businessUnit || '').toLowerCase();
-    if (bu.indexOf('burmeier') !== -1) {
+    if (bu.indexOf('howryou') !== -1) {
+      companyLogo.src = 'https://rmkcdn.successfactors.com/70ccb92e/61920400-cd1b-4fd3-9830-a.png';
+      companyLogo.alt = 'HowRyou';
+    } else if (bu.indexOf('burmeier') !== -1) {
       companyLogo.src = ASSETS + 'Images/burmeier.svg';
       companyLogo.alt = 'Burmeier';
     } else {
