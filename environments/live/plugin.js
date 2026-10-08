@@ -174,6 +174,16 @@
     return 'rest'; // "Wir bieten", "Benefits", "What we offer", …
   }
 
+  // Where the contact block starts inside the CTA footer: an "Ihr Ansprechpartner"
+  // line (Test content), or — when that line is missing (Live content) — the
+  // short company line ("Stiegelmeyer GmbH & Co. KG") or the contact photo.
+  const startsContact = node => {
+    const t = (node.textContent || '').trim();
+    return /Ansprechpartner/i.test(t) ||
+      (t.length <= 80 && /\b(GmbH|KG|AG|SE)\b/.test(t)) ||
+      !!(node.tagName === 'IMG' || node.querySelector?.('img'));
+  };
+
   // ── SAP SuccessFactors layout tokens (preferred over feed parsing) ──────────
   // The job page exposes the description as three `.joblayouttoken` components
   // labelled "Kopfzeile / Stellenbeschreibung / Fußzeile der Stellenbeschreibung"
@@ -224,7 +234,7 @@
     if (tk.footer) {
       let state = 'cta';
       for (const node of flattenBlocks(tk.footer)) {
-        if (state === 'cta' && /Ansprechpartner/i.test(node.textContent)) state = 'contact';
+        if (state === 'cta' && startsContact(node)) state = 'contact';
         out[state].push(node);
       }
     }
@@ -337,7 +347,7 @@
       // CTA / contact transitions take priority
       if (state !== 'cta' && state !== 'contact' && /Haben wir Ihr Interesse geweckt/i.test(text)) {
         state = dest = 'cta';
-      } else if (state === 'cta' && /Ansprechpartner/i.test(text)) {
+      } else if (state === 'cta' && startsContact(node)) {
         state = dest = 'contact';
       } else if (state === 'cta' || state === 'contact') {
         dest = state;
