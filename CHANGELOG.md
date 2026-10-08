@@ -5,6 +5,13 @@ Wird ausschließlich vom `promote-test-to-live`-Skill ergänzt, nicht von Hand.
 
 <!-- Neue Einträge werden hier oben eingefügt -->
 
+## live-2026-10-08-1632
+- Promoted current src/ state to Live (feed: https://job.stiegelmeyer-group.com/feed/435055).
+- Enthält: HowRyou-Logo (Live mit eigener SF-CDN-URL), mehrere Städte aus `<multilocation>`
+  in Kachel und JSON-LD, einheitliche Schriften/Überschriften, geteilter Feed-Cache,
+  CTA-Button einzeilig, Ablösung von benefits.js.
+- Test war zum Zeitpunkt der Promotion auf demselben src/-Stand.
+
 ## live-2026-09-03-1812
 - Erste Promotion nach der Test/Live-Restrukturierung: aktueller `src/`-Stand mit
   `config/live.json` gebaut und auf https://stgm-plugin.pages.dev (Cloudflare-Branch `main`)
