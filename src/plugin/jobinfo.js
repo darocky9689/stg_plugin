@@ -205,7 +205,7 @@
     var companyLogo = document.createElement('img');
     var bu = (info.businessUnit || '').toLowerCase();
     if (bu.indexOf('howryou') !== -1) {
-      companyLogo.src = 'https://rmkcdn.successfactors.com/70ccb92e/61920400-cd1b-4fd3-9830-a.png';
+      companyLogo.src = '__HOWRYOU_LOGO_URL__';
       companyLogo.alt = 'HowRyou';
     } else if (bu.indexOf('burmeier') !== -1) {
       companyLogo.src = ASSETS + 'Images/burmeier.svg';

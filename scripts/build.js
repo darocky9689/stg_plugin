@@ -42,6 +42,7 @@ function applyTokens(content, config, sourceFile) {
   const tokenValues = {
     __FEED_BASE_URL__: config.feedBaseUrl,
     __DEFAULT_FEED_ID__: config.defaultFeedId,
+    __HOWRYOU_LOGO_URL__: config.howryouLogoUrl,
   };
 
   const replaced = content.replace(TOKEN_PATTERN, (token) => {

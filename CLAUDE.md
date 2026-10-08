@@ -20,7 +20,7 @@ The client runs **two SAP SuccessFactors systems**: **Test** (development) and *
 
 `z_old/retired-benefits-module.js` was a separate, older benefits renderer (once `src/plugin/benefits.js`) with its own, outdated benefit-ID mapping. It duplicated `header.js`'s benefits section but — unlike it — showed a visible "Keine Benefits für diesen Job hinterlegt." fallback whenever its stale ID table didn't match the feed. It's no longer part of the build; kept only for reference.
 
-Feed URLs are **not** hardcoded in `src/` — they're placeholder tokens (`__FEED_BASE_URL__`, `__DEFAULT_FEED_ID__`) filled in at build time from `config/<env>.json`. At runtime every module builds the feed URL the same way: `__FEED_BASE_URL__` + the page's `?feedId=` query param (if numeric), else `__DEFAULT_FEED_ID__`.
+Feed URLs are **not** hardcoded in `src/` — they're placeholder tokens (`__FEED_BASE_URL__`, `__DEFAULT_FEED_ID__`) filled in at build time from `config/<env>.json`. At runtime every module builds the feed URL the same way: `__FEED_BASE_URL__` + the page's `?feedId=` query param (if numeric), else `__DEFAULT_FEED_ID__`. The HowRyou logo URL is likewise a token (`__HOWRYOU_LOGO_URL__`, from `howryouLogoUrl`), because Test and Live host it on different SF CDN paths.
 
 ## Environments
 

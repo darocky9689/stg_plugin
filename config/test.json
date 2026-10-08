@@ -1,5 +1,6 @@
 {
   "label": "Test",
   "feedBaseUrl": "https://stiegemeyt1.valhalla55.stage.jobs2web.com/feed/",
-  "defaultFeedId": "430205"
+  "defaultFeedId": "430205",
+  "howryouLogoUrl": "https://rmkcdn.successfactors.com/70ccb92e/61920400-cd1b-4fd3-9830-a.png"
 }

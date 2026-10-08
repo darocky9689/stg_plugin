@@ -28,7 +28,7 @@
   // Markenlogik analog zu jobinfo.js / seo.js.
   function resolveCompanyLogo(businessUnit) {
     const bu = (businessUnit || '').toLowerCase();
-    if (bu.includes('howryou')) return { src: 'https://rmkcdn.successfactors.com/70ccb92e/61920400-cd1b-4fd3-9830-a.png', alt: 'HowRyou' };
+    if (bu.includes('howryou')) return { src: 'https://rmkcdn.successfactors.com/70ccb92e/9ccb4354-330a-4f15-a15c-0.png', alt: 'HowRyou' };
     if (bu.includes('burmeier')) return { src: CONFIG.assets + 'Images/burmeier.svg', alt: 'Burmeier' };
     return { src: CONFIG.assets + 'Images/stiegelmeyer-logo.svg', alt: 'Stiegelmeyer' };
   }
@@ -1234,7 +1234,7 @@
     var companyLogo = document.createElement('img');
     var bu = (info.businessUnit || '').toLowerCase();
     if (bu.indexOf('howryou') !== -1) {
-      companyLogo.src = 'https://rmkcdn.successfactors.com/70ccb92e/61920400-cd1b-4fd3-9830-a.png';
+      companyLogo.src = 'https://rmkcdn.successfactors.com/70ccb92e/9ccb4354-330a-4f15-a15c-0.png';
       companyLogo.alt = 'HowRyou';
     } else if (bu.indexOf('burmeier') !== -1) {
       companyLogo.src = ASSETS + 'Images/burmeier.svg';

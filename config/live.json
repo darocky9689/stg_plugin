@@ -1,5 +1,6 @@
 {
   "label": "Live",
   "feedBaseUrl": "https://job.stiegelmeyer-group.com/feed/",
-  "defaultFeedId": "435055"
+  "defaultFeedId": "435055",
+  "howryouLogoUrl": "https://rmkcdn.successfactors.com/70ccb92e/9ccb4354-330a-4f15-a15c-0.png"
 }

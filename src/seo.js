@@ -60,7 +60,7 @@
       return {
         name: 'HowRyou',
         url: 'https://www.stiegelmeyer-group.com',
-        logo: 'https://rmkcdn.successfactors.com/70ccb92e/61920400-cd1b-4fd3-9830-a.png'
+        logo: '__HOWRYOU_LOGO_URL__'
       };
     }
     if (bu.indexOf('burmeier') !== -1) {
