@@ -158,7 +158,9 @@
 
   // A block is a section heading if it is a real <h1-6>, or a short <p> used in
   // place of a heading whose text matches a known section label (DE + EN).
-  const SECTION_RE = /aufgab|herausforderung|t[äa]tigkeit|challeng|responsibilit|your role|profil|qualifik|qualific|anforderung|requirement|das bringen sie mit|what you bring|wir bieten|was wir bieten|benefits|what we offer|we offer|unsere leistungen/i;
+  // Apprenticeship postings (Ausbildung) use du-form labels instead:
+  // "Was erwartet Dich?" / "Was bringst du mit?" / "Was bieten wir Dir?".
+  const SECTION_RE = /aufgab|herausforderung|t[äa]tigkeit|challeng|responsibilit|your role|was erwartet (dich|sie)|profil|qualifik|qualific|anforderung|requirement|(das|was) bringen sie mit|(das|was) bringst du mit|what you bring|wir bieten|bieten wir|benefits|what we offer|we offer|unsere leistungen/i;
   function headingOf(el) {
     if (/^H[1-6]$/.test(el.tagName)) return el.textContent.trim();
     if (el.tagName === 'P') {
@@ -169,10 +171,16 @@
   }
 
   function classifyHeading(t) {
-    if (/aufgab|herausforderung|t[äa]tigkeit|challeng|responsibilit|your role/i.test(t)) return 'aufgaben';
-    if (/profil|qualifik|qualific|anforderung|requirement|das bringen sie mit|what you bring/i.test(t)) return 'profil';
+    if (/aufgab|herausforderung|t[äa]tigkeit|challeng|responsibilit|your role|was erwartet (dich|sie)/i.test(t)) return 'aufgaben';
+    if (/profil|qualifik|qualific|anforderung|requirement|(das|was) bringen sie mit|(das|was) bringst du mit|what you bring/i.test(t)) return 'profil';
     return 'rest'; // "Wir bieten", "Benefits", "What we offer", …
   }
+
+  // Du-form text (Ausbildung postings) → our own labels switch from Sie to du.
+  const DU_RE = /\b(du|dich|dir|dein\w*)\b/i;
+
+  // CTA opener, Sie- or du-form: "Haben wir Ihr / Dein Interesse geweckt?"
+  const CTA_RE = /Haben wir (Ihr|Dein) Interesse geweckt/i;
 
   // Where the contact block starts inside the CTA footer: an "Ihr Ansprechpartner"
   // line (Test content), or — when that line is missing (Live content) — the
@@ -222,7 +230,7 @@
       let state = 'lead';
       for (const node of flattenBlocks(tk.body)) {
         // A baked-in apply CTA belongs to the footer token, not the body.
-        if (/Haben wir Ihr Interesse geweckt/i.test(node.textContent)) break;
+        if (CTA_RE.test(node.textContent)) break;
         const h = headingOf(node);
         const dest = h ? (state = classifyHeading(h)) : state;
         out[dest].push(node);
@@ -256,11 +264,11 @@
     return null;
   }
 
-  // Feed <customfield5> is either "Ab sofort" (→ "nächstmöglichen Termin") or a
+  // Feed <customfield5> is either "(Ab) sofort" (→ "nächstmöglichen Termin") or a
   // DD.MM.YYYY date (→ "01. September 2025").
   function formatEntryDate(raw) {
     const v = (raw || '').trim();
-    if (!v || /ab sofort/i.test(v)) return 'nächstmöglichen Termin';
+    if (!v || /^(ab )?sofort$/i.test(v)) return 'nächstmöglichen Termin';
     const m = v.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
     if (m) {
       const month = MONTHS_DE[Number(m[2]) - 1];
@@ -269,9 +277,23 @@
     return v; // unknown format → show as-is
   }
 
+  // Trainee posting (du-form)? Ausbildung: feed <department> is
+  // "Berufsausbildung" or the title starts with "Ausbildung …"; Praktikum:
+  // the title starts with "Praktikum". Returns the words before the title, else null.
+  function traineeArticle(jobNode) {
+    const title = nodeText(jobNode, 'title');
+    if (/^ausbildung\b/i.test(title)) return 'eine';
+    // Bare job title ("Industriekaufmann") → "für eine Ausbildung als | Industriekaufmann"
+    if (/ausbildung/i.test(nodeText(jobNode, 'department'))) return 'eine Ausbildung als';
+    if (/^praktikum\b/i.test(title)) return 'ein';
+    return null;
+  }
+
   // Composes the eyebrow line above the job title.
-  function buildHeaderLead(department, entryDate) {
+  function buildHeaderLead(department, entryDate, traineeArt) {
     const termin = formatEntryDate(entryDate);
+    // "… suchen wir Dich für eine | Ausbildung als …" / "für ein | Praktikum"
+    if (traineeArt) return `Zum ${termin} suchen wir Dich für ${traineeArt}`;
     const word = resolveContractWord(department);
     return word
       ? `Zur ${word} Unterstützung unseres Teams suchen wir zum ${termin} einen`
@@ -345,7 +367,7 @@
       let dest;
 
       // CTA / contact transitions take priority
-      if (state !== 'cta' && state !== 'contact' && /Haben wir Ihr Interesse geweckt/i.test(text)) {
+      if (state !== 'cta' && state !== 'contact' && CTA_RE.test(text)) {
         state = dest = 'cta';
       } else if (state === 'cta' && startsContact(node)) {
         state = dest = 'contact';
@@ -557,7 +579,8 @@
     const title = jobNode ? (nodeText(jobNode, 'title') || 'Jobtitel') : 'Jobtitel';
 
     // Dynamic intro sentence + "für den Bereich …" line, both from the feed.
-    const lead = buildHeaderLead(nodeText(jobNode, 'department'), nodeText(jobNode, 'customfield5'));
+    const traineeArt = jobNode ? traineeArticle(jobNode) : null;
+    const lead = buildHeaderLead(nodeText(jobNode, 'department'), nodeText(jobNode, 'customfield5'), traineeArt);
     const dept = nodeText(jobNode, 'dept');
 
     // Speech bubble: "BE PART OF THE SOLUTION" ("BE" in white)
@@ -583,11 +606,14 @@
     // Bottom: static heading + intro paragraphs from feed
     const introDiv = mk('div', { className: 'sg-header-intro' });
     if (introNodes && introNodes.length) {
-      introNodes.forEach(n => introDiv.appendChild(cleanClone(n, false)));
+      introNodes
+        // Skip a "Zur Verstärkung unseres Teams suchen wir …" line — the eyebrow already says it.
+        .filter(n => !/^Zur \S+( \S+)? unseres Teams suchen wir/i.test(n.textContent.trim()))
+        .forEach(n => introDiv.appendChild(cleanClone(n, false)));
     }
 
     const bottom = mk('div', { className: 'sg-header-bottom' }, [
-      mk('p', { className: 'sg-header-werden', textContent: 'Werden Sie ein Teil unseres Teams' }),
+      mk('p', { className: 'sg-header-werden', textContent: traineeArt ? 'Werde ein Teil unseres Teams' : 'Werden Sie ein Teil unseres Teams' }),
       introDiv,
     ]);
 
@@ -644,6 +670,44 @@
 
     const root = mk('div', { className: 'sg-body-root sg-root', id: 'sg-body-root' });
 
+    // Initiativbewerbung (the one open-application posting): its whole body is
+    // a single "Kein passendes Angebot …? Wir freuen uns über …" line, which
+    // would vanish as a lone paragraph → render it as a centred callout.
+    if (jobNode && /initiativbewerbung/i.test(nodeText(jobNode, 'title'))) {
+      const text = sections.body.map(el => el.textContent.trim()).filter(Boolean).join(' ');
+      if (text) {
+        injectStyle('sg-open-app-style', `
+          ${ROOTS} .sg-open-app {
+            margin: 40px auto; max-width: 760px; padding: 44px 32px 40px; box-sizing: border-box;
+            text-align: center; background: #f1f5f8; border-top: 5px solid ${CONFIG.yellow}; border-radius: 8px;
+          }
+          ${ROOTS} .sg-open-app-q {
+            margin: 0 !important; font-size: 1.6em !important; font-weight: 700 !important; line-height: 1.3 !important;
+            color: ${CONFIG.blue} !important; -webkit-text-fill-color: ${CONFIG.blue} !important; text-align: center !important;
+          }
+          ${ROOTS} .sg-open-app-a {
+            margin: 14px 0 0 !important; font-size: 1.15em !important; line-height: 1.5 !important; text-align: center !important;
+          }
+          ${ROOTS} .sg-open-app-a::before {
+            content: ''; display: block; width: 56px; height: 3px; margin: 0 auto 16px; background: ${CONFIG.yellow};
+          }
+          @media (max-width: ${CONFIG.mobileBreakpoint}px) {
+            ${ROOTS} .sg-open-app   { margin: 24px 0; padding: 32px 20px 28px; }
+            ${ROOTS} .sg-open-app-q { font-size: 1.3em !important; }
+          }
+        `);
+        // Question → headline, the rest → answer line below it.
+        const m = text.match(/^(.*?\?)\s*(.+)$/);
+        const box = mk('div', { className: 'sg-open-app' }, [
+          mk('h2', { className: 'sg-open-app-q', textContent: m ? m[1] : text }),
+        ]);
+        if (m) box.appendChild(mk('p', { className: 'sg-open-app-a', textContent: m[2] }));
+        root.appendChild(box);
+        insertBeforeScript(root);
+        return;
+      }
+    }
+
     // Lead (role intro): everything between the company boilerplate (header) and
     // the first heading. Shared by both layouts.
     const addLead = () => {
@@ -663,12 +727,21 @@
       // Real <h2> headings for SEO; drop the feed's own (duplicate) headings —
       // both real <h1-6> and short <p> pseudo-headings (via headingOf).
       const bodyOnly = nodes => nodes.filter(el => !headingOf(el));
+      // Sie-form feeds get our normalised labels. Du-form (Ausbildung) feeds
+      // keep their own wording ("Was erwartet Dich?", "Was bringst du mit?")
+      // when both headings are du-form; mixed feeds get "Deine/Dein …".
+      const ownLabel = nodes => (nodes.map(headingOf).find(Boolean) || '').replace(/[:\s]+$/, '');
+      const ownA = ownLabel(sections.aufgaben), ownP = ownLabel(sections.profil);
+      const duA = DU_RE.test(ownA), duP = DU_RE.test(ownP);
+      const [labelA, labelP] = duA && duP ? [ownA, ownP]
+        : duA || duP ? ['Deine Aufgaben', 'Dein Profil']
+        : ['Ihre Aufgaben', 'Ihr Profil'];
       const leftCol = mk('div', { className: 'sg-col' }, [
-        sgHeading('Ihre Aufgaben', 'sg-col-heading'),
+        sgHeading(labelA, 'sg-col-heading'),
       ]);
       appendClones(leftCol, bodyOnly(sections.aufgaben));
       const rightCol = mk('div', { className: 'sg-col' }, [
-        sgHeading('Ihr Profil', 'sg-col-heading'),
+        sgHeading(labelP, 'sg-col-heading'),
       ]);
       appendClones(rightCol, bodyOnly(sections.profil));
       root.appendChild(mk('div', { className: 'sg-two-col' }, [leftCol, rightCol]));
@@ -774,6 +847,10 @@
       .sg-cta-apply-col a,.sg-cta-apply-col button,.sg-cta-apply-col input { position:relative; display:inline-block; width:auto !important; white-space:nowrap; background:${CONFIG.blue} !important; color:#fff !important; -webkit-text-fill-color:#fff !important; border:0 !important; padding:18px 48px !important; border-radius:18px 0 18px 0 !important; font-weight:800 !important; font-size:1.2em !important; letter-spacing:.4px; text-transform:uppercase; text-decoration:none !important; cursor:pointer; box-shadow:0 6px 16px rgba(0,30,60,0.22); transition:transform .12s ease, box-shadow .12s ease; }
       .sg-cta-apply-col a::after,.sg-cta-apply-col button::after { content:''; position:absolute; bottom:-15px; left:0; width:0; height:0; border-top:15px solid ${CONFIG.blue}; border-right:22px solid transparent; }
       .sg-cta-apply-col a:hover,.sg-cta-apply-col button:hover { transform:translateY(-1px); box-shadow:0 9px 22px rgba(0,30,60,0.28); }
+      /* The Live SF theme recolours the apply button on hover/focus (white) with
+         a more specific selector → pin the colours for every state, ID-anchored. */
+      body #sg-cta-root .sg-cta-apply-col :is(a, button, input):is(:hover, :focus, :active, :visited) { background:${CONFIG.blue} !important; color:#fff !important; -webkit-text-fill-color:#fff !important; border:0 !important; }
+      body #sg-cta-root .sg-cta-apply-col :is(a, button):is(:hover, :focus, :active) * { color:#fff !important; -webkit-text-fill-color:#fff !important; }
       @media (max-width: ${CONFIG.mobileBreakpoint}px) {
         .sg-cta-box  { padding: 20px 18px; }
         .sg-cta-bottom { flex-direction:column; gap:24px; margin-top:20px; padding-top:20px; }
@@ -797,7 +874,7 @@
     ctaSection.forEach(el => {
       if (isBlank(el)) return;
       const text = el.textContent.trim();
-      if (!headingEl && /^Haben wir Ihr Interesse geweckt\s*\??\s*$/i.test(text)) {
+      if (!headingEl && /^Haben wir (Ihr|Dein) Interesse geweckt\s*\??\s*$/i.test(text)) {
         headingEl = sgHeading(text, 'sg-cta-heading');
       } else {
         leadNodes.push(el);
