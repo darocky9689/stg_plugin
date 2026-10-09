@@ -5,6 +5,11 @@ Wird ausschließlich vom `promote-test-to-live`-Skill ergänzt, nicht von Hand.
 
 <!-- Neue Einträge werden hier oben eingefügt -->
 
+## live-2026-10-09-0722
+- Promoted current src/ state to Live (feed: https://job.stiegelmeyer-group.com/feed/435055).
+- Test was on the same src/ state at time of promotion.
+- Du-Form für Ausbildung/Praktikum (Abschnitte, Spaltentitel, CTA, Header), "sofort" → "nächstmöglichen Termin", Initiativbewerbung-Kasten, Button-Hover-Farben.
+
 ## live-2026-10-08-1632
 - Promoted current src/ state to Live (feed: https://job.stiegelmeyer-group.com/feed/435055).
 - Enthält: HowRyou-Logo (Live mit eigener SF-CDN-URL), mehrere Städte aus `<multilocation>`
