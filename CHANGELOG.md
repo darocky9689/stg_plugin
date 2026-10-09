@@ -5,6 +5,11 @@ Wird ausschließlich vom `promote-test-to-live`-Skill ergänzt, nicht von Hand.
 
 <!-- Neue Einträge werden hier oben eingefügt -->
 
+## live-2026-10-09-0726
+- Current src/ state deployed to Live (feed: https://job.stiegelmeyer-group.com/feed/435055) via cloudflare-deploy.
+- Initiativbewerbung: Header-Text „Zur Verstärkung unseres Teams freuen wir uns über Ihre“, Zeile „für den Bereich Sonstige“ entfällt.
+- Test wurde nicht separat deployt (Test-Build liegt auf demselben src/-Stand im Repo).
+
 ## live-2026-10-09-0722
 - Promoted current src/ state to Live (feed: https://job.stiegelmeyer-group.com/feed/435055).
 - Test was on the same src/ state at time of promotion.
