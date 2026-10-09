@@ -289,6 +289,10 @@
     return null;
   }
 
+  // The one open-application posting ("Initiativbewerbung") gets its own
+  // header wording and a centred body callout.
+  const isOpenApplication = jobNode => !!jobNode && /initiativbewerbung/i.test(nodeText(jobNode, 'title'));
+
   // Composes the eyebrow line above the job title.
   function buildHeaderLead(department, entryDate, traineeArt) {
     const termin = formatEntryDate(entryDate);
@@ -580,8 +584,12 @@
 
     // Dynamic intro sentence + "für den Bereich …" line, both from the feed.
     const traineeArt = jobNode ? traineeArticle(jobNode) : null;
-    const lead = buildHeaderLead(nodeText(jobNode, 'department'), nodeText(jobNode, 'customfield5'), traineeArt);
-    const dept = nodeText(jobNode, 'dept');
+    // Initiativbewerbung: no entry date / department to speak of ("Sonstige").
+    const openApp = isOpenApplication(jobNode);
+    const lead = openApp
+      ? 'Zur Verstärkung unseres Teams freuen wir uns über Ihre'
+      : buildHeaderLead(nodeText(jobNode, 'department'), nodeText(jobNode, 'customfield5'), traineeArt);
+    const dept = openApp ? '' : nodeText(jobNode, 'dept');
 
     // Speech bubble: "BE PART OF THE SOLUTION" ("BE" in white)
     const bubble = document.createElement('div');
@@ -673,7 +681,7 @@
     // Initiativbewerbung (the one open-application posting): its whole body is
     // a single "Kein passendes Angebot …? Wir freuen uns über …" line, which
     // would vanish as a lone paragraph → render it as a centred callout.
-    if (jobNode && /initiativbewerbung/i.test(nodeText(jobNode, 'title'))) {
+    if (isOpenApplication(jobNode)) {
       const text = sections.body.map(el => el.textContent.trim()).filter(Boolean).join(' ');
       if (text) {
         injectStyle('sg-open-app-style', `
