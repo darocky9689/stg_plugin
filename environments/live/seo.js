@@ -12,11 +12,21 @@
 // ============================================================================
 (function () {
   'use strict';
-  if (window.__jobPostingSeoPluginInitialized) return;
-  window.__jobPostingSeoPluginInitialized = true;
+  // Eigener Init-Flag + eigene Script-ID: Die Live-Seite enthaelt im <head>
+  // noch eine alte, fest eingebettete Kopie dieses Plugins (nur ein Ort pro
+  // Stelle). Sie setzt window.__jobPostingSeoPluginInitialized und schreibt
+  // #seo-jobposting-jsonld. Mit den alten Namen wuerde diese Datei sofort
+  // abbrechen. Stattdessen laeuft sie unabhaengig und ersetzt die alten Daten
+  // (siehe removeLegacyJsonLd).
+  if (window.__sgJobPostingSeoInitialized) return;
+  window.__sgJobPostingSeoInitialized = true;
 
   var DEFAULT_FEED_ID = '435055';
-  var JSONLD_SCRIPT_ID = 'seo-jobposting-jsonld';
+  var JSONLD_SCRIPT_ID = 'sg-jobposting-jsonld';
+  var LEGACY_JSONLD_SCRIPT_ID = 'seo-jobposting-jsonld';
+  // Die alte Kopie laedt den Feed selbst (12 s Timeout) und kann ihr JSON-LD
+  // auch NACH uns einfuegen -> so lange darauf achten und es wieder entfernen.
+  var LEGACY_WATCH_MS = 20000;
   var FEED_TIMEOUT_MS = 12000;
 
   // Orte, die im Feed als "Stadt" stehen, aber KEINE echte Stadt sind.
@@ -367,6 +377,23 @@
     (document.head || document.documentElement).appendChild(script);
   }
 
+  // Entfernt das JSON-LD der alten eingebetteten Kopie, sofort und fuer
+  // LEGACY_WATCH_MS auch dann, wenn sie es erst spaeter einfuegt. Wird nur
+  // nach erfolgreichem eigenen JSON-LD aufgerufen: Faellt unser Feed aus,
+  // bleiben die alten Daten stehen (besser als gar keine).
+  function removeLegacyJsonLd() {
+    var sweep = function () {
+      var old = document.getElementById(LEGACY_JSONLD_SCRIPT_ID);
+      if (old && old.parentNode) old.parentNode.removeChild(old);
+    };
+    sweep();
+    try {
+      var observer = new MutationObserver(sweep);
+      observer.observe(document.documentElement, { childList: true, subtree: true });
+      window.setTimeout(function () { observer.disconnect(); }, LEGACY_WATCH_MS);
+    } catch (e) { /* nie die Seite blockieren */ }
+  }
+
   // ---- Feed laden (mit Timeout) --------------------------------------------
   // Teilt sich window.__sgFeedCache mit plugin.js (gleiche Seite, gleiche
   // Feed-URL) -> der Feed wird pro Seitenaufruf nur einmal geladen.
@@ -420,6 +447,7 @@
       // Reihenfolge wichtig: erst valides JSON-LD einspielen,
       // dann das kaputte Microdata entfernen.
       injectJsonLd(data);
+      removeLegacyJsonLd();
       neutralizeBrokenMicrodata();
     } catch (e) {
       if (window.console && console.warn) console.warn('[SEO JobPosting] Fehler:', e);
