@@ -5,6 +5,11 @@ Wird ausschließlich vom `promote-test-to-live`-Skill ergänzt, nicht von Hand.
 
 <!-- Neue Einträge werden hier oben eingefügt -->
 
+## live-2026-10-12-1103
+- Promoted current src/ state to Live (feed: https://job.stiegelmeyer-group.com/feed/435055).
+- Test was on the same src/ state at time of promotion.
+- Praktikum layout: 'Wir wünschen uns' recognised as profile, lead full-width in fallback layout, CTA question split from its call to action, no 'für den Bereich Sonstige', fixed 'Mitarbeiter--Events'.
+
 ## live-2026-10-09-0920
 - Promoted current src/ state to Live (feed: https://job.stiegelmeyer-group.com/feed/435055).
 - Test was on the same src/ state at time of promotion.
