@@ -160,7 +160,8 @@
   // place of a heading whose text matches a known section label (DE + EN).
   // Apprenticeship postings (Ausbildung) use du-form labels instead:
   // "Was erwartet Dich?" / "Was bringst du mit?" / "Was bieten wir Dir?".
-  const SECTION_RE = /aufgab|herausforderung|t[äa]tigkeit|challeng|responsibilit|your role|was erwartet (dich|sie)|profil|qualifik|qualific|anforderung|requirement|(das|was) bringen sie mit|(das|was) bringst du mit|what you bring|wir bieten|bieten wir|benefits|what we offer|we offer|unsere leistungen/i;
+  // Praktikum postings ask for the profile as "Wir wünschen uns".
+  const SECTION_RE = /aufgab|herausforderung|t[äa]tigkeit|challeng|responsibilit|your role|was erwartet (dich|sie)|profil|qualifik|qualific|anforderung|requirement|(das|was) bringen sie mit|(das|was) bringst du mit|what you bring|wir w[üu]nschen uns|wir bieten|bieten wir|benefits|what we offer|we offer|unsere leistungen/i;
   function headingOf(el) {
     if (/^H[1-6]$/.test(el.tagName)) return el.textContent.trim();
     if (el.tagName === 'P') {
@@ -172,7 +173,7 @@
 
   function classifyHeading(t) {
     if (/aufgab|herausforderung|t[äa]tigkeit|challeng|responsibilit|your role|was erwartet (dich|sie)/i.test(t)) return 'aufgaben';
-    if (/profil|qualifik|qualific|anforderung|requirement|(das|was) bringen sie mit|(das|was) bringst du mit|what you bring/i.test(t)) return 'profil';
+    if (/profil|qualifik|qualific|anforderung|requirement|(das|was) bringen sie mit|(das|was) bringst du mit|what you bring|wir w[üu]nschen uns/i.test(t)) return 'profil';
     return 'rest'; // "Wir bieten", "Benefits", "What we offer", …
   }
 
@@ -589,7 +590,9 @@
     const lead = openApp
       ? 'Zur Verstärkung unseres Teams freuen wir uns über Ihre'
       : buildHeaderLead(nodeText(jobNode, 'department'), nodeText(jobNode, 'customfield5'), traineeArt);
-    const dept = openApp ? '' : nodeText(jobNode, 'dept');
+    // "Sonstige" is SF's catch-all, not a real department → no "für den Bereich …" line.
+    const rawDept = nodeText(jobNode, 'dept');
+    const dept = openApp || /^sonstige?$/i.test(rawDept) ? '' : rawDept;
 
     // Speech bubble: "BE PART OF THE SOLUTION" ("BE" in white)
     const bubble = document.createElement('div');
@@ -769,8 +772,12 @@
       // Fallback (body not split into Aufgaben/Profil): keep the two-column look.
       // Group the body into heading-led chunks and balance them across two
       // columns — never splitting a list — reusing the column + heading styling.
+      // The lead (text before the first heading) spans the full width above the
+      // columns, as in the recognised layout, instead of filling a column alone.
+      addLead();
+      const leadSet = new Set(sections.lead || []);
       const bodyNodes = sections.body.filter(el =>
-        !isBlank(el) && !/^position\s*:/i.test(el.textContent.trim()));
+        !leadSet.has(el) && !isBlank(el) && !/^position\s*:/i.test(el.textContent.trim()));
 
       const chunks = [];
       bodyNodes.forEach(n => {
@@ -877,13 +884,19 @@
 
     // Row 1 + 2: pull the standalone "Haben wir Ihr Interesse geweckt?" line out
     // as a real heading (SEO); the rest of the cta section is the lead text.
+    // Some postings run the question straight into the call to action in one
+    // paragraph ("… geweckt? Dann bewirb dich …") → split it there.
     let headingEl = null;
     const leadNodes = [];
     ctaSection.forEach(el => {
       if (isBlank(el)) return;
       const text = el.textContent.trim();
+      const joined = !headingEl && text.match(/^(Haben wir (?:Ihr|Dein) Interesse geweckt\s*\?)\s+(.+)$/is);
       if (!headingEl && /^Haben wir (Ihr|Dein) Interesse geweckt\s*\??\s*$/i.test(text)) {
         headingEl = sgHeading(text, 'sg-cta-heading');
+      } else if (joined) {
+        headingEl = sgHeading(joined[1], 'sg-cta-heading');
+        leadNodes.push(mk('p', { textContent: joined[2] }));
       } else {
         leadNodes.push(el);
       }
@@ -1012,7 +1025,7 @@
     87: ['Mitgestaltungsmöglichkeiten', null],
     88: ['Attraktive Vergütung', 'verguetung.png'],
     89: ['Modernes IT-Equipment', 'ITequipment.png'],
-    90: ['Mitarbeiter-­Events', 'Mitarbeiterevents.png'],
+    90: ['Mitarbeiter-Events', 'Mitarbeiterevents.png'], // breaks after the hyphen; a soft hyphen here rendered "Mitarbeiter--"
   };
 
   // The Live SF system still uses the older option IDs 8–30 (Test uses 36–90),
