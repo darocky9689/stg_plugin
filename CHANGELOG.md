@@ -5,6 +5,11 @@ Wird ausschließlich vom `promote-test-to-live`-Skill ergänzt, nicht von Hand.
 
 <!-- Neue Einträge werden hier oben eingefügt -->
 
+## live-2026-11-05-0927
+- Promoted current src/ state to Live (feed: https://job.stiegelmeyer-group.com/feed/435055).
+- Test was on the same src/ state at time of promotion.
+- Job title font size reduced at client request: desktop 3.2em -> 2.4em, mobile 1.9em -> 1.6em.
+
 ## live-2026-10-12-1103
 - Promoted current src/ state to Live (feed: https://job.stiegelmeyer-group.com/feed/435055).
 - Test was on the same src/ state at time of promotion.
