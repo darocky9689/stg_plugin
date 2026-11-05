@@ -505,8 +505,8 @@
         color: #fff !important;
         -webkit-text-fill-color: #fff;
         font-weight: 800;
-        font-size: 3.2em;
-        line-height: 1.1;
+        font-size: 2.4em;
+        line-height: 1.15;
         text-transform: uppercase;
         hyphens: auto;
         overflow-wrap: break-word;
@@ -571,7 +571,7 @@
         .sg-header-content  { min-height: 0; padding: 28px 20px 32px; }
         .sg-header-top      { flex-direction: column-reverse; gap: 16px; }
         .sg-header-eyebrow  { font-size: 1.2em; margin-bottom: 10px; }
-        .sg-header-title    { font-size: 1.9em; }
+        .sg-header-title    { font-size: 1.6em; }
         .sg-header-subtitle { font-size: 1.15em; margin-top: 12px; }
         .sg-header-bubble   { font-size: 1.8em; padding: 18px 22px; align-self: flex-end; border-radius: 16px 0 16px 0; }
         .sg-header-bubble::after { display: none; }
