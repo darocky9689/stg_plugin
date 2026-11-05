@@ -161,7 +161,8 @@
   // Apprenticeship postings (Ausbildung) use du-form labels instead:
   // "Was erwartet Dich?" / "Was bringst du mit?" / "Was bieten wir Dir?".
   // Praktikum postings ask for the profile as "Wir wünschen uns".
-  const SECTION_RE = /aufgab|herausforderung|t[äa]tigkeit|challeng|responsibilit|your role|was erwartet (dich|sie)|profil|qualifik|qualific|anforderung|requirement|(das|was) bringen sie mit|(das|was) bringst du mit|what you bring|wir w[üu]nschen uns|wir bieten|bieten wir|benefits|what we offer|we offer|unsere leistungen/i;
+  // Some postings phrase them as "Woran Sie bei uns arbeiten" / "Was Sie mitbringen sollten".
+  const SECTION_RE = /aufgab|herausforderung|t[äa]tigkeit|challeng|responsibilit|your role|was erwartet (dich|sie)|woran (sie|du)\b|profil|qualifik|qualific|anforderung|requirement|(das|was) bringen sie mit|(das|was) bringst du mit|was (sie|du) mitbringen|what you bring|wir w[üu]nschen uns|wir bieten|bieten wir|benefits|what we offer|we offer|unsere leistungen/i;
   function headingOf(el) {
     if (/^H[1-6]$/.test(el.tagName)) return el.textContent.trim();
     if (el.tagName === 'P') {
@@ -172,8 +173,8 @@
   }
 
   function classifyHeading(t) {
-    if (/aufgab|herausforderung|t[äa]tigkeit|challeng|responsibilit|your role|was erwartet (dich|sie)/i.test(t)) return 'aufgaben';
-    if (/profil|qualifik|qualific|anforderung|requirement|(das|was) bringen sie mit|(das|was) bringst du mit|what you bring|wir w[üu]nschen uns/i.test(t)) return 'profil';
+    if (/aufgab|herausforderung|t[äa]tigkeit|challeng|responsibilit|your role|was erwartet (dich|sie)|woran (sie|du)\b/i.test(t)) return 'aufgaben';
+    if (/profil|qualifik|qualific|anforderung|requirement|(das|was) bringen sie mit|(das|was) bringst du mit|was (sie|du) mitbringen|what you bring|wir w[üu]nschen uns/i.test(t)) return 'profil';
     return 'rest'; // "Wir bieten", "Benefits", "What we offer", …
   }
 
